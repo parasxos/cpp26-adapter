@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "hooks": {
+    "SessionStart": [
+      {
+        "description": "Probe the local C++ toolchain; warn if clang<22 or gcc<16 (informational, never blocking).",
+        "command": "bash ${CLAUDE_PLUGIN_ROOT}/tools/check_toolchain.sh"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "description": "Pass-1 anti-pattern check on any C++ file the assistant just edited or wrote.",
+        "matcher": "Edit|Write|NotebookEdit",
+        "filePattern": "*.{cpp,cc,cxx,c++,h,hpp,hxx,h++,ipp,tpp}",
+        "command": "python3 ${CLAUDE_PLUGIN_ROOT}/tools/cpp26_lint/quick_lint.py --compact"
+      }
+    ]
+  }
+}
