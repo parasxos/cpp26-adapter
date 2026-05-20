@@ -24,6 +24,7 @@ dist/
 corpus/raw/*.html
 corpus/raw/*.pdf
 corpus/raw/*.bs
+corpus/raw/fetch_log.json
 !corpus/raw/.gitkeep
 
 # Local Claude artifacts
