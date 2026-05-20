@@ -1,0 +1,279 @@
+# Compiler implementation status for deep-tier C++26 papers.
+#
+# Snapshot date: 2026-05-20 (see `last_refreshed`). This data goes stale
+# fast — refresh via corpus/scripts/refresh_status.py (manual diff
+# against upstream cxx-status pages + bloomberg/clang-p2996 README).
+#
+# Schema (per paper):
+#   PXXXX:
+#     <compiler-id>:
+#       support: full | partial | none | unknown
+#       version: "<earliest version with this support level, or 'fork'>"
+#       note: "<free text, ≤120 chars>"
+#
+# Compiler ids tracked:
+#   clang-22       — mainline LLVM clang 22 (released ~early 2026)
+#   clang-p2996    — Bloomberg's reflection fork (tracks P2996 head)
+#   gcc-16         — GCC 16 (released ~early 2026)
+#   msvc-19.40     — MSVC compiler shipping with VS 2026
+#
+# Used INFORMATIONALLY by the cpp26-reviewer Pass-2 path to classify
+# diagnostics as bug-vs-compiler-lag. NOT used by the suggestion path
+# (the skill is compiler-agnostic per the Constitution).
+
+last_refreshed: 2026-05-20
+
+P2996:
+  clang-22:
+    support: partial
+    version: "22.0"
+    note: "Splicer parses; std::meta API surface ~70% complete; template for works"
+  clang-p2996:
+    support: full
+    version: "fork"
+    note: "Tracks P2996R13 head; reference implementation"
+  gcc-16:
+    support: none
+    note: "No reflection branch landed; design tracked in WG21 only"
+  msvc-19.40:
+    support: none
+    note: "Listed on roadmap; no preview build yet"
+
+P2900:
+  clang-22:
+    support: partial
+    version: "22.0"
+    note: "pre()/post()/contract_assert() parse; violation handler hooks land in 22.1"
+  clang-p2996:
+    support: partial
+    note: "Same as clang-22 (fork inherits)"
+  gcc-16:
+    support: partial
+    version: "16.1"
+    note: "-fcontracts enables pre/post/assert; violation semantic flags subset"
+  msvc-19.40:
+    support: none
+    note: "Tracked; preview expected late 2026"
+
+P2300:
+  clang-22:
+    support: partial
+    version: "22.0"
+    note: "libc++ ships sender/scheduler concepts + then/just/when_all/sync_wait; let_value partial"
+  clang-p2996:
+    support: partial
+    note: "Inherits libc++ surface"
+  gcc-16:
+    support: partial
+    version: "16.0"
+    note: "libstdc++ has the algebra; scheduler implementations limited to static_thread_pool"
+  msvc-19.40:
+    support: partial
+    note: "Microsoft STL has sender concepts + then; complete subset TBD"
+
+P1306:
+  clang-22:
+    support: partial
+    version: "22.0"
+    note: "template for over tuples and packs; reflection-range form depends on P2996 progress"
+  clang-p2996:
+    support: full
+    note: "Full template for support paired with reflection"
+  gcc-16:
+    support: none
+    note: "Expansion statements not implemented; design accepted"
+  msvc-19.40:
+    support: none
+    note: "Not yet announced for a preview build"
+
+P2662:
+  clang-22:
+    support: full
+    version: "22.0"
+    note: "Pack indexing args...[N] and Ts...[N] both stable"
+  clang-p2996:
+    support: full
+    note: "Inherits from mainline clang"
+  gcc-16:
+    support: full
+    version: "16.0"
+    note: "Pack indexing stable since GCC 15.2"
+  msvc-19.40:
+    support: full
+    note: "Compiler-side fully supported"
+
+P2573:
+  clang-22:
+    support: full
+    version: "22.0"
+    note: "= delete(\"reason\") syntax and diagnostic surfacing stable"
+  clang-p2996:
+    support: full
+    note: "Inherits"
+  gcc-16:
+    support: full
+    version: "16.0"
+    note: "Available since GCC 14.x"
+  msvc-19.40:
+    support: full
+    note: "Stable in VS 2026 preview 1+"
+
+P2893:
+  clang-22:
+    support: full
+    version: "22.0"
+    note: "Variadic friends fully supported"
+  clang-p2996:
+    support: full
+    note: "Inherits"
+  gcc-16:
+    support: partial
+    version: "16.1"
+    note: "Basic forms work; templated-friend-with-pack edge cases hit defects"
+  msvc-19.40:
+    support: partial
+    note: "Common case works; ICEs reported on combinations with concepts"
+
+P1967:
+  clang-22:
+    support: full
+    version: "22.0"
+    note: "#embed with all parameters (limit, prefix, suffix, if_empty) stable"
+  clang-p2996:
+    support: full
+    note: "Inherits"
+  gcc-16:
+    support: full
+    version: "16.0"
+    note: "#embed stable since GCC 15"
+  msvc-19.40:
+    support: partial
+    note: "Basic #embed works; some parameter forms not yet"
+
+P2795:
+  clang-22:
+    support: partial
+    version: "22.0"
+    note: "Erroneous-behaviour zero-init default behind -ferroneous-behavior; [[indeterminate]] supported"
+  clang-p2996:
+    support: partial
+    note: "Inherits"
+  gcc-16:
+    support: partial
+    version: "16.0"
+    note: "Similar opt-in flag (-ftrivial-auto-var-init=zero compatible)"
+  msvc-19.40:
+    support: partial
+    note: "/RTCs covers analogous ground; opt-in flag for EB conformance TBD"
+
+P1673:
+  clang-22:
+    support: partial
+    version: "22.0"
+    note: "libc++ ships <linalg> headers; vendor BLAS adapters incomplete"
+  clang-p2996:
+    support: partial
+    note: "Inherits libc++"
+  gcc-16:
+    support: partial
+    version: "16.0"
+    note: "libstdc++ has the API; reference implementations only, no vendor delegation"
+  msvc-19.40:
+    support: none
+    note: "Microsoft STL <linalg> in development; preview build expected late 2026"
+
+P2530:
+  clang-22:
+    support: full
+    version: "22.0"
+    note: "libc++ <hazard_pointer> stable; based on the folly::hazptr design"
+  clang-p2996:
+    support: full
+    note: "Inherits"
+  gcc-16:
+    support: full
+    version: "16.0"
+    note: "libstdc++ ships <hazard_pointer>"
+  msvc-19.40:
+    support: partial
+    note: "Headers present; performance tuning ongoing"
+
+P2545:
+  clang-22:
+    support: full
+    version: "22.0"
+    note: "libc++ <rcu> ships rcu_default_domain + obj_base + synchronize_rcu"
+  clang-p2996:
+    support: full
+    note: "Inherits"
+  gcc-16:
+    support: full
+    version: "16.0"
+    note: "libstdc++ <rcu> stable"
+  msvc-19.40:
+    support: partial
+    note: "Tracking; preview expected later 2026"
+
+P3471:
+  clang-22:
+    support: partial
+    version: "22.0"
+    note: "_LIBCPP_HARDENING_MODE supported; standard __STDCPP_HARDENING_MODE macro recognition in progress"
+  clang-p2996:
+    support: partial
+    note: "Inherits"
+  gcc-16:
+    support: partial
+    version: "16.1"
+    note: "_GLIBCXX_HARDEN flag; standard macro alias in 16.1"
+  msvc-19.40:
+    support: partial
+    note: "_ITERATOR_DEBUG_LEVEL covers the standard's mandates partially"
+
+P3068:
+  clang-22:
+    support: partial
+    version: "22.0"
+    note: "throw in constant evaluation works; some <stdexcept> types not yet constexpr-friendly"
+  clang-p2996:
+    support: partial
+    note: "Inherits"
+  gcc-16:
+    support: partial
+    version: "16.0"
+    note: "Compiler-side throw/try/catch in constexpr works; library types partial"
+  msvc-19.40:
+    support: partial
+    note: "Compiler-side full; library updates ongoing"
+
+P2169:
+  clang-22:
+    support: full
+    version: "22.0"
+    note: "_ placeholder works in structured bindings, locals, lambda init-captures, params"
+  clang-p2996:
+    support: full
+    note: "Inherits"
+  gcc-16:
+    support: full
+    version: "16.0"
+    note: "Stable"
+  msvc-19.40:
+    support: full
+    note: "Stable"
+
+P0843:
+  clang-22:
+    support: full
+    version: "22.0"
+    note: "libc++ <inplace_vector> stable; try_push_back noexcept"
+  clang-p2996:
+    support: full
+    note: "Inherits"
+  gcc-16:
+    support: full
+    version: "16.0"
+    note: "libstdc++ <inplace_vector> stable"
+  msvc-19.40:
+    support: full
+    note: "Microsoft STL <inplace_vector> shipping in VS 2026 GA"
