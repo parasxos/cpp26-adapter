@@ -1,0 +1,32 @@
+# Fixture compiler-status matrix — covers PFIX001/PFIX002 only.
+# Schema:
+#   <paper_id>:
+#     <compiler>:
+#       support: full | partial | none | unknown
+#       version: "<compiler version where support appeared>"
+#       note: "<free text>"
+
+PFIX001:
+  clang-22:
+    support: partial
+    version: "22.0"
+    note: "splicers behind -freflection; std::meta API incomplete"
+  clang-p2996:
+    support: full
+    version: "fork"
+    note: "Bloomberg fork tracks P2996 head"
+  gcc-16:
+    support: none
+    note: "no reflection branch yet"
+  msvc-19.40:
+    support: none
+    note: "tracked in roadmap; not in main"
+
+PFIX002:
+  clang-22:
+    support: partial
+    version: "22.0"
+    note: "contract_assert parses; runtime semantics partial"
+  gcc-16:
+    support: partial
+    note: "subset under -fcontracts"

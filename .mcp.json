@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "cpp26-ref": {
+      "command": "python3",
+      "args": ["-m", "cpp26_ref.server"],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}/mcp-server/src",
+      "env": {
+        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}/mcp-server/src"
+      }
+    }
+  }
+}

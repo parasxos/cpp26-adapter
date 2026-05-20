@@ -1,0 +1,52 @@
+# Fixture C++26 index — 5 papers for MCP unit tests.
+# Paper ids start with PFIX to avoid colliding with real WG21 papers.
+
+- id: PFIX001
+  title: "Reflection for C++26 (fixture)"
+  revision: R1
+  meeting: 2025-06
+  tier: deep
+  category: reflection
+  keywords: [reflect, std::meta, splice, "^^", template for]
+  ref: references/PFIX001.md
+  canonical_url: https://example.invalid/PFIX001
+
+- id: PFIX002
+  title: "Contracts (fixture)"
+  revision: R1
+  meeting: 2025-06
+  tier: deep
+  category: contracts
+  keywords: [contract_assert, pre, post, contract]
+  ref: references/PFIX002.md
+  canonical_url: https://example.invalid/PFIX002
+
+- id: PFIX003
+  title: "Generic Senders for std::execution (fixture)"
+  revision: R2
+  meeting: 2024-11
+  tier: shallow
+  category: concurrency
+  keywords: [sender, scheduler, async, std::execution]
+  ref: references/PFIX003.md
+  canonical_url: https://example.invalid/PFIX003
+
+- id: PFIX004
+  title: "Pack Indexing (fixture)"
+  revision: R3
+  meeting: 2024-03
+  tier: shallow
+  category: core
+  keywords: [pack, indexing, "...[N]", variadic]
+  ref: references/PFIX004.md
+  canonical_url: https://example.invalid/PFIX004
+
+- id: PFIX005
+  title: "Saturation Arithmetic Helpers (fixture)"
+  revision: R0
+  meeting: 2023-telecon
+  tier: stub
+  category: library
+  keywords: [saturate, add_sat, mul_sat]
+  ref: references/PFIX005.md
+  canonical_url: https://example.invalid/PFIX005
