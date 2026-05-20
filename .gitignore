@@ -30,5 +30,7 @@ corpus/raw/fetch_log.json
 # Local Claude artifacts
 .claude/
 
-# Eval run artefacts (regenerable from eval/run.py)
-eval/results-*.md
+# Eval result files: regenerable, but track the one that proves the
+# current gate-pass so the repo carries proof of v0.9.x → v1.x.
+# Untracked drafts: rename to results-draft-*.md.
+eval/results-draft-*.md

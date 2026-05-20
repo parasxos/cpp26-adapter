@@ -128,10 +128,28 @@ def call_claude(prompt: str, plugin_dir: Path | None, timeout: int = 300) -> tup
 # ---- axis 1: standard compliance ----------------------------------------------
 
 def axis1(task: dict[str, Any], response: str) -> AxisResult:
+    """Score against must_contain / must_not_contain regex gates.
+
+    must_contain — checked against the whole response. The C++26 idiom
+    can appear in either code or surrounding narrative; either counts.
+
+    must_not_contain — checked against the LAST fenced ```cpp``` block
+    only (or the whole response if no fences exist). Prose may
+    legitimately mention pre-C++26 alternatives as context (the SKILL.md
+    decision table teaches "C++26 form vs pre-C++26 form" explicitly);
+    anchoring to the last code block lets the plugin contextualize
+    without penalizing it. The "last block" heuristic handles refactor
+    prompts where the response contains a "before" block (echoed from
+    the prompt) and an "after" block — only the after-block is the
+    answer we score.
+    """
     must_contain = task.get("must_contain") or []
     must_not = task.get("must_not_contain") or []
-    miss = [p for p in must_contain if not re.search(p, response, re.IGNORECASE | re.DOTALL)]
-    leak = [p for p in must_not    if     re.search(p, response, re.IGNORECASE | re.DOTALL)]
+    cpp_blocks = CPP_BLOCK_RE.findall(response)
+    code_for_leaks = cpp_blocks[-1] if cpp_blocks else response
+
+    miss = [p for p in must_contain if not re.search(p, response,        re.IGNORECASE | re.DOTALL)]
+    leak = [p for p in must_not    if     re.search(p, code_for_leaks, re.IGNORECASE | re.DOTALL)]
     if not miss and not leak:
         return AxisResult(pass_=True, detail="all gates met")
     detail = []

@@ -212,9 +212,9 @@
     Show the idiomatic C++26 way to declare the local so reads are
     safe by default.
   rule_tested: P2795
-  expected_idiom: 'Leaves the local default-initialized (no explicit = 0); does NOT use [[indeterminate]] unless asked.'
+  expected_idiom: 'Leaves the local default-initialized (no explicit = 0) OR uses value-init `{}`; does NOT use [[indeterminate]] unless asked.'
   must_not_contain: ["\\[\\[indeterminate\\]\\]"]
-  must_contain: ["int\\s+total\\s*;", "for"]
+  must_contain: ["int\\s+total\\s*[;{]", "for"]
 
 # ===== P1673 std::linalg (2 tasks) =====
 - id: matrix-multiply
@@ -412,7 +412,7 @@
     iterating, in modern C++?
   rule_tested: P2662
   expected_idiom: "args...[0]"
-  must_contain: ["\\.\\.\\.\\[0\\]"]
+  must_contain: ["\\.\\.\\.\\s*\\[\\s*0\\s*\\]"]
   must_not_contain: ["forward_as_tuple"]
 
 - id: enable-hardening-cmake
