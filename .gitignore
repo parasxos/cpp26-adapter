@@ -26,8 +26,5 @@ corpus/raw/*.pdf
 corpus/raw/*.bs
 !corpus/raw/.gitkeep
 
-# Built SQLite from YAML corpus
-corpus/cpp26.sqlite
-
 # Local Claude artifacts
 .claude/

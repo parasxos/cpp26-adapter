@@ -1,746 +1,530 @@
-# cpp26-adapter — Implementation Plan
+# cpp26-adapter — Binding Implementation Plan (v1.1)
 
-**Status:** binding plan v1.0 — locks scope and approach for build phases 0–9.
-**Owner:** Paris Moschovakos (parasxos)
-**Target completion:** ~25 focused days (≈2–3 months calendar time around CERN work)
-**Last updated:** 2026-05-20
+**Owner:** parasxos · **Budget:** ~25 focused days, 2–3 months calendar · **Status:** binding, ready to execute.
 
 ---
 
-## 0. Charter
+## Context
 
-### Mission
+The repo is a fresh skeleton (`.claude-plugin/`, `skills/cpp26-idioms/`, `mcp-server/`, `corpus/`, `agents/`, `hooks/`, `commands/`, `tools/` — all `.gitkeep`-only) plus a v0 plan in `PLAN.md`. Goal: ship an installable Claude Code plugin that biases generation toward C++26 final-form constructs from **ISO/IEC 14882:2026**, independent of compiler maturity.
 
-Build a Claude Code plugin that turns a general-purpose LLM into a C++26 specialist by stacking four primitives (skill + MCP + agent + hooks) on top of the base model. The plugin biases generation toward C++26 final-form constructs as documented in **ISO/IEC 14882:2026**, independent of current compiler maturity.
+**Why this exists.** A general-purpose model defaults to whatever C++ idiom is most represented in training data — that's overwhelmingly pre-C++26. Without active bias, users asking for "enum-to-string" get X-macros instead of `std::meta`, `assert` instead of `contract_assert`, `std::async` instead of senders. The plugin's job is to flip that default.
 
-### Core policy (the architectural invariant)
-
-1. **Recommendations follow the standard, not the toolchain.**
-2. If `clang 22` / `gcc 16` don't yet implement a feature in C++26 final form, suggest it anyway.
-3. Compiler errors flow through to the user as **information** (classified `compiler-lag` vs `bug`), never as automatic fixes.
-4. Stay **compiler-agnostic** in the suggestion layer (Layers A/B). Compiler-aware **only** in the verification layer (Layer C, informational pass).
-5. Different compilers will diverge slightly; the standard is the source of truth.
-
-### Non-goals
-
-- Rewriting legacy C++23 code unprompted. Only generate fresh code in C++26, or rewrite on explicit request.
-- Tracking C++29 drafts. Scope is final-published C++26 only.
-- Shipping a compiler. We can reference Bloomberg's `clang-p2996` for reflection compile-checks where useful, but installation is the user's responsibility.
-- Building a general-purpose C++ linter. The reviewer agent's job is C++26-specific patterns, not generic style.
-
-### Definition of done (v1.0)
-
-- ≥150 C++26 features structured into a queryable corpus (~30 deep, ~80 shallow, ~40 stub)
-- Skill biases LLM toward C++26 idioms automatically; eval suite scores ≥85% correct idiom selection
-- MCP exposes 6 lookup tools, backed by corpus + sentence-transformer index
-- Reviewer agent classifies output as `pass | needs-changes | compiler-lag-only`
-- Installable via `/plugin install` from at least one marketplace (private or public, TBD)
-- Quarterly maintenance plan documented and triggered (cron or manual)
+**Intended outcome.** Installed via `/plugin install`, the plugin (a) makes Claude suggest C++26 idioms automatically, (b) surfaces canonical paper/spec references on demand for ≥150 features, (c) classifies generated code as `pass | needs-changes | compiler-lag-only`, and (d) scores ≥85% correct idiom selection on a held eval suite vs the base model.
 
 ---
 
-## 1. Architecture
+## Departures from PLAN.md (v0)
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│  Layer D — BUILD INTEGRATION                                 │
-│   /cpp26-init   PostToolUse hook   SessionStart probe        │
-├──────────────────────────────────────────────────────────────┤
-│  Layer C — VERIFICATION (two-pass, runs as subagent)         │
-│   Pass 1: STANDARD compliance (KB-driven, always runs)       │
-│   Pass 2: COMPILER compile-check (informational only)        │
-│           → classifies failures as bug | compiler-lag        │
-├──────────────────────────────────────────────────────────────┤
-│  Layer B — IDIOM BIAS (skill, COMPILER-AGNOSTIC)             │
-│   Constitution + decision tree + paper IDs                   │
-├──────────────────────────────────────────────────────────────┤
-│  Layer A — REFERENCE (MCP server)                            │
-│   Backed by corpus/ — papers, features, status               │
-└──────────────────────────────────────────────────────────────┘
-                            ▲
-                            │
-                     Base LLM (Claude)
-```
+v0 is a solid framing but overbuilds in three places that will hurt a solo maintainer:
 
-### Layer roles
+1. **MCP server is too heavy for v1.0.** v0 specifies FastMCP + sentence-transformers + pydantic + SQLite build step + vector index. That's a quarterly-refresh liability (Torch deps, model staleness, install footprint) for queries that are 90% paper-ID lookup. **Replaced with:** a 3-tool MCP backed by direct file reads against a markdown corpus, in-memory keyword + fuzzy scoring. No SQLite, no embeddings, no build step. If the corpus grows past ~2 MB, swap the search backend without changing the tool contract.
+2. **YAML-as-storage + SQLite-at-install adds a build step.** Claude consumes markdown best (Read tool, progressive disclosure). **Replaced with:** markdown-native references (`references/PXXXX.md`) with a small YAML frontmatter for metadata. Skill points to them by path; MCP reads them too. One source of truth, no transform.
+3. **Reviewer agent's "clang-tidy custom checks" track is YAGNI.** v0 already marks Stage 2 "later"; I drop it from v1.0 entirely. Regex + `clang -fsyntax-only` + status cross-reference is enough for the classification job.
 
-| Layer | Primitive | Role | Compiler-aware? |
-|---|---|---|---|
-| A | MCP server | Authoritative reference lookup | No |
-| B | Skill (SKILL.md) | Idiom selection bias | **No** (per policy) |
-| C | Subagent | Verification pass | Yes (informational only) |
-| D | Hooks + slash command | Build/IDE integration | Yes |
-
-### Information flow for a single interaction
-
-1. User asks Claude: *"Add a serializer for this struct using reflection."*
-2. **Layer B** is in context → biases Claude toward `std::meta`, blocks fallback to template trickery.
-3. Claude calls **Layer A**: `lookup_feature("static reflection serialize example")` → gets canonical P2996 syntax.
-4. Claude generates the code.
-5. Claude invokes **Layer C** subagent on the file:
-   - Pass 1 (KB): no anti-patterns found, idiom matches paper.
-   - Pass 2 (compiler): clangd reports errors → check `status.yaml` → P2996 marked "partial in clang 22" → classify as `compiler-lag`.
-6. Final response: code + note "this is correct per C++26 P2996; clang 22 has partial support, full support expected in clang 25 — install `bloomberg/clang-p2996` to compile today."
+Other adjustments: tier rebalance (20/50/80 instead of 30/80/40 — deep curation is the bottleneck), eval bar locked at **85%** to match the user-stated DoD (v0 used 90%), reviewer agent re-scoped to 2 days, phases re-ordered so the skill can be drafted in parallel with corpus extraction.
 
 ---
 
-## 2. The Corpus (the long-pole)
+## Architecture
 
-### 2.1 Sourcing strategy
+```mermaid
+flowchart TB
+    subgraph KB["Knowledge Corpus (corpus/)"]
+        IDX["index.yaml<br/>(150 rows: id, title, tier, paper_url)"]
+        REF["references/PXXXX.md<br/>(frontmatter + prose)"]
+        STAT["status.yaml<br/>(per-feature compiler matrix)"]
+    end
 
-| Source | Role |
-|---|---|
-| **`github.com/cplusplus/papers`** (issue tracker) | Master index — filter by milestone "C++26", status "adopted" |
-| **`wg21.link/N5008`** (or the final ratified WD number) | Ground-truth working draft |
-| **`github.com/cplusplus/draft`** (LaTeX standard source) | Exact wording authority |
-| **`cppreference.com/w/cpp/26`** | Human-readable feature index (community-maintained, CC-BY-SA) |
-| **WG21 trip reports** (Sutter, Stroustrup, isocpp.org) | Editorial context |
-| **Individual papers** (`wg21.link/PXXXXRN`) | Per-feature canonical text |
+    subgraph PRIM["Claude Code Primitives"]
+        SKILL["Skill: cpp26-idioms<br/>SKILL.md + decision table<br/>(always in context)"]
+        MCP["MCP: cpp26-ref<br/>3 tools<br/>(invoked on demand)"]
+        AGENT["Subagent: cpp26-reviewer<br/>Pass1=regex Pass2=clang<br/>(invoked on review)"]
+        HOOK["Hooks + /cpp26-init<br/>SessionStart, PostToolUse"]
+    end
 
-### 2.2 Filter algorithm
+    USER([User prompt]) --> SKILL
+    SKILL -- "lookup_paper / search" --> MCP
+    SKILL -- "Read references/" --> REF
+    MCP --> IDX
+    MCP --> REF
+    MCP -- "compiler_status" --> STAT
+    SKILL -- "delegate review" --> AGENT
+    AGENT -- "Pass 1: anti-patterns" --> KB
+    AGENT -- "Pass 2: clang -fsyntax-only" --> CLANG[(clang/gcc<br/>local toolchain)]
+    AGENT -- "classify lag vs bug" --> STAT
+    HOOK -- "/cpp26-init writes" --> PROJ[(user's CMake project)]
+    HOOK -- "PostToolUse → quick_lint.sh" --> AGENT
 
+    classDef agnostic fill:#dff,stroke:#066
+    classDef aware fill:#fdd,stroke:#900
+    class SKILL,MCP,IDX,REF agnostic
+    class AGENT,STAT,HOOK,CLANG aware
 ```
-1. Pull all GitHub issues in cplusplus/papers
-2. Filter: milestone == "C++26" AND status label contains "adopted"
-3. For each, identify the "adopted revision" (highest R-number voted in)
-4. Remove papers later withdrawn or superseded
-5. Cross-check against cppreference C++26 page
-6. Output: papers.csv (~150 rows)
-```
 
-### 2.3 Tiering
+**Compiler-agnostic (cyan) vs compiler-aware (pink) is the invariant**: suggestion path never reads `status.yaml`; only the reviewer's Pass 2 and the SessionStart probe do.
 
-Not all 150 papers deserve equal depth. Three tiers:
+### Information flow for "Add a serializer using reflection"
 
-| Tier | Count | Depth | Source effort |
-|---|---|---|---|
-| **Major** (transformative for style) | ~30 | Full schema: problem, motivation, all canonical examples, pre-C++26 equivalent, gotchas, compiler-status row | Hand-curated + LLM-assisted |
-| **Minor** (small additions, new functions) | ~80 | Title + 1-paragraph summary + one example + pre/post comparison if obvious | Auto-extracted, spot-checked 10% |
-| **Editorial** (footnotes, defect fixes) | ~40 | Title + abstract only | Auto-extracted, no review |
-
-### 2.4 Major-tier seed list (refine in Phase 1a)
-
-Papers expected to qualify as major (subject to final verification):
-
-| Paper | Title | Category |
-|---|---|---|
-| P2996 | Reflection for C++26 | core |
-| P3068 / P3096 / P3394 / P3491 | Reflection supporting machinery | core |
-| P2900 | Contracts (preconditions, postconditions, contract_assert) | core |
-| P2300 | std::execution (sender/receiver async) | library |
-| P1306 | Expansion statements (`template for`) | core |
-| P2662 | Pack indexing (`pack...[N]`) | core |
-| P2573 | `= delete("reason")` | core |
-| P2893 | Variadic friends | core |
-| P1967 | `#embed` | preprocessor |
-| P2795 | Erroneous behavior / `[[indeterminate]]` | core |
-| P1673 | `std::linalg` (BLAS-style linear algebra) | library |
-| P1121 / P2545 | Hazard pointers / RCU | library |
-| P3471 | Library hardening profile | library |
-| P3068 | Constexpr exception types | core |
-| P1938 | `if consteval` polish | core |
-| P2169 | Placeholder with no name | core |
-| P0843 | `std::inplace_vector` | library |
-
-(Final list locked after Phase 1a discovery.)
-
-### 2.5 Feature record schema
-
-Definitive schema for `corpus/features/PXXXX.yaml`:
-
-```yaml
-id: P2996                              # WG21 paper number
-title: "Reflection for C++26"
-revision_adopted: R13                  # the revision voted into the standard
-adopted_at: "Sofia 2025-06"            # meeting where adopted
-category: core                         # core | library | preprocessor | editorial
-tier: major                            # major | minor | editorial
-canonical_url: https://wg21.link/P2996R13
-cppreference_url: https://en.cppreference.com/w/cpp/experimental/reflect
-
-problem: |
-  Multi-paragraph statement of the problem the feature solves. What is hard or
-  impossible in pre-C++26 C++? What workarounds did people use? Why were those
-  workarounds insufficient?
-
-motivation: |
-  Why this design? Why now? What did the committee weigh? What was rejected?
-  Drawn from the paper's "Motivation" or "Design Discussion" sections.
-
-key_syntax_elements:
-  - "^^ (reflection operator) — produces std::meta::info"
-  - "[: ... :] (splicer) — re-injects reflected entity"
-  - "std::meta::* (introspection API namespace)"
-
-canonical_examples:
-  - title: "Enum to string"
-    code: |
-      // Full compilable snippet under -std=c++2c
-      template <typename E> requires std::is_enum_v<E>
-      constexpr std::string_view enum_name(E v) {
-        template for (constexpr auto e : std::meta::enumerators_of(^^E))
-          if ([:e:] == v) return std::meta::identifier_of(e);
-        return "<unknown>";
-      }
-    explanation: |
-      What this replaces, why it's better, anything subtle.
-
-pre_cpp26_equivalent: |
-  - X-macros — define enum + string list in tandem macro pair
-  - Boost.Describe — requires BOOST_DESCRIBE_STRUCT per type
-  - magic_enum — limited to enums in compile-time-known integral ranges
-  - External codegen — build-step complexity
-
-gotchas:
-  - Reflection happens in constant evaluation only.
-  - Splicers must appear in specific syntactic contexts.
-  - std::meta::info is not directly printable — use identifier_of().
-  - Some queries are O(n) over members; careful in large types.
-
-compiler_status:
-  # Captured in corpus/status.yaml, repeated here for record completeness.
-  # NOT consulted by Layer A/B; only Layer C Pass 2.
-  clang-22:
-    support: partial
-    flag: "-std=c++2c"
-    notes: "Core only, no std::meta::reflect_*"
-  clang-p2996:
-    support: full
-    flag: "-std=c++2c -freflection-latest"
-    notes: "Bloomberg experimental fork"
-  gcc-16:
-    support: none
-    notes: "Tracking; no release date"
-  msvc-19.40:
-    support: none
-
-related_papers: [P3068, P3096, P3394, P3491, P1306]
-
-keywords: [reflect, std::meta, splice, "^^", "template for"]
-```
+1. Skill is in context → constitution biases toward `std::meta`.
+2. Claude calls `mcp__cpp26-ref__lookup_paper("P2996")` (or reads `references/P2996.md` directly).
+3. Claude writes code using `^^`, splicers, `template for`.
+4. PostToolUse hook runs `quick_lint.sh` (regex pass) — passes.
+5. User/Claude invokes `@cpp26-reviewer` → Pass 1 (anti-patterns) clean; Pass 2 (`clang -std=c++2c -fsyntax-only`) errors → reviewer reads `status.yaml[P2996][clang-22] = partial` → classifies `compiler-lag-only`.
+6. Final response: code + "correct per C++26 P2996; clang 22 partial — install `bloomberg/clang-p2996` to compile today."
 
 ---
 
-## 3. Phase plan
+## Phase plan
 
-Effort assumes one focused person. Calendar estimate uses 1 FTE.
+### Phase 0 — Setup (½ day)
 
-### Phase 0 — Setup & decisions (½ day)
+- Write `.claude-plugin/plugin.json` (name, version, description, author).
+- Write `LICENSE-CODE` (MIT) and `LICENSE-CORPUS` (CC-BY-SA 4.0).
+- Decide and pin Python version for MCP (3.11+); add `mcp-server/pyproject.toml` with **only** `mcp`, `pyyaml`, `pydantic`.
+- First commit; tag `v0.0.1`.
 
-| Sub-task | Deliverable |
-|---|---|
-| Lock scope (already done: full plan, all 4 layers) | This PLAN.md |
-| Lock distribution (TBD — recommend public-but-low-key) | README license section |
-| Pick KB storage: YAML files in git + SQLite built at install | (already chosen here) |
-| Repo skeleton (already created) | `~/code/parasxos/plugins/cpp26-adapter/` |
-| Choose corpus license: code MIT, corpus CC-BY-SA 4.0 | `LICENSE-CODE`, `LICENSE-CORPUS` |
-| First commit | Initial git history |
-
-**Acceptance:** repo cloneable, PLAN.md committed, skeleton in place.
+**Acceptance:** repo has manifest, licenses, MCP scaffold; `python -c "import mcp"` works in venv.
 
 ---
 
-### Phase 1 — Corpus assembly (5–8 days) — *the real work*
+### Phase 1 — Knowledge corpus (6–8 days, the long pole)
 
 #### 1a. Master index (1 day)
 
-- [ ] Script `corpus/scripts/fetch_index.py`:
-  - Hit GitHub API for `cplusplus/papers` issues
-  - Filter milestone="C++26", state="closed", label contains "adopted"
-  - For each: extract paper_id, title, adopted_revision (from issue body), adoption_meeting
-- [ ] Cross-check against cppreference C++26 page (manual diff)
-- [ ] Cross-check against final WG21 plenary trip report
-- [ ] Manual: assign tier (major/minor/editorial) per row
-- [ ] Output: `corpus/papers.csv`
-
-**Acceptance:** ≥140 rows, all tiered, spot-check 20 random against cppreference.
-
-#### 1b. Paper fetcher (1 day)
-
-- [ ] Script `corpus/scripts/fetch_papers.py`:
-  - For each paper in `papers.csv`, resolve `wg21.link/PXXXX` to latest revision
-  - Download HTML / PDF / Bikeshed source as available
-  - Cache under `corpus/raw/PXXXXRN.{html,pdf,bs}`
-  - Track failures in `corpus/raw/fetch_log.json`
-- [ ] Retry/escalate failures manually
-
-**Acceptance:** ≥95% of papers fetched; manual override possible for stragglers.
-
-#### 1c. Content extraction (3–5 days) — *the slog*
-
-**Major tier (~30, hand-curated + LLM-assisted):**
-
-- [ ] For each major paper, work through it personally with LLM help
-- [ ] Fill full schema (problem, motivation, examples, pre-26 equivalent, gotchas)
-- [ ] Validate every code example: parse-check via `clang -std=c++2c -fsyntax-only` where supported; syntactic inspection where not
-- [ ] Output: `corpus/features/PXXXX.yaml`
-- [ ] Estimate: 2–3 hours per paper × 30 = 60–90 hours
-
-**Minor tier (~80, auto-extracted):**
-
-- [ ] Script `corpus/scripts/extract_minor.py`:
-  - Feed paper text to Claude with a structured prompt
-  - Capture title, 1-paragraph summary, first canonical example, pre/post if extractable
-- [ ] Spot-check 10% manually; correct as needed
-- [ ] Output: `corpus/features/PXXXX.yaml` with `tier: minor`
-
-**Editorial tier (~40, stub):**
-
-- [ ] Script: title + abstract auto-extracted, no review
-- [ ] Output: `corpus/features/PXXXX.yaml` with `tier: editorial`
-
-**Acceptance:** every paper in `papers.csv` has a corresponding YAML; major-tier validated against canonical examples.
-
-#### 1d. Compiler status table (½ day)
-
-- [ ] Pull from:
-  - `clang.llvm.org/cxx_status.html`
-  - `gcc.gnu.org/projects/cxx-status.html`
-  - Microsoft Learn docs for MSVC
-  - `bloomberg/clang-p2996` README (for P2996-specific)
-- [ ] Capture as `corpus/status.yaml`:
+- Write `corpus/scripts/fetch_index.py`:
+  - GitHub API → `cplusplus/papers` issues; filter `milestone="C++26"`, label contains `adopted`.
+  - Extract `(paper_id, title, adopted_revision, adoption_meeting)`.
+- Cross-check against `cppreference.com/w/cpp/26` (manual diff, log discrepancies).
+- Manually assign tier per row.
+- Output: `corpus/index.yaml` (one row per paper).
 
 ```yaml
-# corpus/status.yaml
-compilers:
-  clang-22:
-    release: "2026-Q1"
-    cxx2c_flag: "-std=c++2c"
-  clang-p2996:
-    release: "rolling"
-    cxx2c_flag: "-std=c++2c -freflection-latest"
-  gcc-16:
-    release: "2026-Q4"
-    cxx2c_flag: "-std=c++2c"
-  msvc-19.40:
-    release: "2026-Q2"
-    cxx2c_flag: "/std:c++latest"
-
-features:
-  P2996:
-    clang-22: { support: partial, notes: "Core only" }
-    clang-p2996: { support: full, notes: "Bloomberg fork" }
-    gcc-16: { support: none }
-    msvc-19.40: { support: none }
-  P2900:
-    clang-22: { support: none }
-    gcc-16: { support: none }
-    # ... etc
+# corpus/index.yaml
+- id: P2996
+  title: "Reflection for C++26"
+  revision: R13
+  meeting: "Sofia 2025-06"
+  tier: deep      # deep | shallow | stub
+  category: core
+  ref: references/P2996.md
 ```
 
-- [ ] Document refresh schedule (quarterly manual)
+**Acceptance:** ≥150 rows tiered; 20 random rows match cppreference C++26 page.
 
-**Acceptance:** all major-tier features have a status row for at least clang-22, gcc-16, msvc-latest.
+#### 1b. Paper fetcher (½ day)
 
-#### 1e. Validation (1 day)
+- `corpus/scripts/fetch_papers.py` resolves each `wg21.link/PXXXX` → cache HTML/PDF under `corpus/raw/` (gitignored). Track failures in `corpus/raw/fetch_log.json`. Retry failed manually.
 
-- [ ] Read 10 random feature YAMLs end-to-end
-- [ ] CI job: run all canonical examples through latest clang under `-std=c++2c -fsyntax-only` (where compiler supports the feature) — pass/skip/fail per example
-- [ ] Fix discovered issues
+**Acceptance:** ≥95% fetched.
 
-**Acceptance:** zero parse-failures on examples where compiler claims full support.
+#### 1c. Content extraction (4–6 days, the slog)
 
----
-
-### Phase 2 — Layer A: Reference MCP server (3 days)
-
-Python FastMCP server in `mcp-server/`.
-
-#### 2a. Server scaffold (½ day)
-
-- [ ] `pyproject.toml` with FastMCP, sentence-transformers, pyyaml, pydantic
-- [ ] Entry point `mcp-server/src/cpp26_ref/server.py`
-- [ ] Build step: `mcp-server/build.py` converts `corpus/features/*.yaml` → `corpus/cpp26.sqlite`
-- [ ] Vector index over (title + problem + keywords) using `all-MiniLM-L6-v2`
-
-#### 2b. Tool implementations (1.5 days)
-
-```python
-@mcp.tool
-def lookup_paper(paper_id: str) -> dict:
-    """Return the full feature record for a WG21 paper ID (e.g., 'P2996')."""
-
-@mcp.tool
-def lookup_feature(query: str, top_k: int = 3) -> list[dict]:
-    """Natural-language search across features. Returns top-k matches."""
-
-@mcp.tool
-def compare_idioms(task: str) -> dict:
-    """Given a task description, return the C++26 idiom paired with its
-    pre-C++26 equivalent. e.g., 'enum to string' → reflection vs X-macros."""
-
-@mcp.tool
-def list_features(category: str = None, tier: str = None) -> list[dict]:
-    """Filtered listing — useful for browsing 'all major core features'."""
-
-@mcp.tool
-def feature_status(paper_id: str, compiler: str = None) -> dict:
-    """Compiler implementation status for a feature. Informational only —
-    do NOT use to gate suggestions."""
-
-@mcp.tool
-def canonical_example(paper_id: str, example_id: int = 0) -> dict:
-    """Return a specific canonical example with full code + explanation."""
-```
-
-#### 2c. Tests (1 day)
-
-- [ ] Unit test per tool against a fixture corpus of 5 features
-- [ ] Integration test: spin up server, exercise full lookup flow via stdio
-- [ ] Latency target: <100ms for lookups, <500ms for vector search
-
-**Acceptance:** all 6 tools work; tests green; server starts in <2 seconds.
-
----
-
-### Phase 3 — Layer B: Idiom skill (1–2 days, iterate later)
-
-`skills/cpp26-idioms/SKILL.md`. Outline:
+Authoring format is markdown with YAML frontmatter — no transform step:
 
 ```markdown
 ---
-name: cpp26-idioms
-description: When generating C++ code, target the C++26 standard (-std=c++2c)
-  and prefer C++26 idioms over older equivalents, independent of current
-  compiler support.
+id: P2996
+title: "Reflection for C++26"
+revision: R13
+tier: deep
+category: core
+keywords: [reflect, std::meta, splice, "^^", template for]
+canonical_url: https://wg21.link/P2996R13
+related: [P3068, P3096, P3394, P3491, P1306]
 ---
 
-# C++26 Idiom Bias
+# P2996 — Reflection for C++26
 
-## Constitution
+## Problem
+…
 
-Generate against the **C++26 standard**, not the current compiler. If a feature
-is in C++26 final form, suggest it. The compiler will catch up; user code won't
-have to be rewritten when it does.
+## Key syntax
+- `^^E` — reflection operator
+- `[: e :]` — splicer
+- `std::meta::*` — introspection API
 
-When uncertain about syntax, call MCP:
-  - cpp26-ref.lookup_paper(<id>)
-  - cpp26-ref.lookup_feature(<query>)
-  - cpp26-ref.compare_idioms(<task>)
-  - cpp26-ref.canonical_example(<id>)
-
-## Standard target
-Default to `-std=c++2c` in CMakeLists.txt / build flags.
-
-## Decision rules (prefer LEFT column unconditionally)
-
-| Use C++26 …                       | …over pre-C++26 …               | Paper |
-|-----------------------------------|----------------------------------|-------|
-| std::meta::reflect_of + splice    | X-macros / Boost.Describe        | P2996 |
-| template for expansion stmt       | recursive variadic templates     | P1306 |
-| contract_assert                   | assert()                         | P2900 |
-| [[pre:]] / [[post:]]              | manual preconditions in body     | P2900 |
-| std::execution::sender            | std::async / raw futures         | P2300 |
-| pack indexing pack...[N]          | std::tuple_element_t<N, …>       | P2662 |
-| = delete("reason")                | deleted with adjacent comment    | P2573 |
-| variadic friends                  | macro repetition                 | P2893 |
-| #embed                            | xxd / cmake configure_file       | P1967 |
-| [[indeterminate]]                 | UB tricks for sentinels          | P2795 |
-| std::linalg                       | hand-rolled BLAS wrappers        | P1673 |
-| hazard pointers / RCU             | shared_ptr ref-cycle ad-hoc      | P1121 |
-| library hardening profile         | manual bounds checks             | P3471 |
-| constexpr exceptions              | error_code at constant eval      | P3068 |
-| std::inplace_vector               | static array + length tracking   | P0843 |
-| placeholder _ (no-name binding)   | _<n> dummy or [[maybe_unused]]   | P2169 |
-
-(~15+ rules; final table reflects major-tier corpus.)
-
-## When to ignore this skill
-- Project's CMakeLists/build files explicitly target an older standard
-  AND the user has not asked for modernization.
-- Embedded target with documented toolchain constraints (ARM bare-metal,
-  FreeRTOS markers).
-- Test code touching a legacy module — keep consistent with surroundings.
-
-## Anti-patterns to flag (if encountered while modifying code)
-- Hand-written enum-to-string switch → suggest reflection
-- BOOST_DESCRIBE_STRUCT → suggest reflection
-- assert() in new code → suggest contract_assert
-- std::async for fan-out → suggest std::execution
-
-## On compiler errors involving C++26 features
-Inform the user: "This is correct per C++26 (see <paper>). Current
-<compiler> doesn't yet implement it. Options: (1) wait for compiler
-update, (2) install Bloomberg's clang-p2996 fork (for reflection),
-(3) keep the C++26 form behind a feature-test macro for now."
-
-Do NOT downgrade the suggestion to a pre-C++26 idiom on the user's behalf.
+## Canonical example: enum to string
+```cpp
+template <typename E> requires std::is_enum_v<E>
+constexpr std::string_view enum_name(E v) { … }
 ```
 
-**Acceptance:** SKILL.md ≤300 lines; decision-tree table covers all major-tier idioms.
+## Pre-C++26 equivalent
+X-macros, Boost.Describe, magic_enum, external codegen.
+
+## Gotchas
+…
+```
+
+- **Deep tier (~20 papers, hand-curated):** problem, motivation, ≥1 canonical example (syntax-checked under best-available compiler), pre-C++26 equivalent, gotchas, related papers. Budget 2.5 hr/paper × 20 = 50 hr.
+- **Shallow tier (~50 papers, LLM-assisted then spot-checked):** title, 1-paragraph summary, one canonical example, pre/post if obvious. Spot-check 15% manually. Budget 25 min/paper × 50 = ~21 hr.
+- **Stub tier (~80 papers):** title + 1-sentence summary auto-extracted; no manual review. Budget 5 min/paper × 80 = ~7 hr.
+
+**Major-tier seed list (already in PLAN.md §2.4):** P2996, P2900, P2300, P1306, P2662, P2573, P2893, P1967, P2795, P1673, P1121, P2545, P3471, P3068, P1938, P2169, P0843 — verify and extend during 1a.
+
+**Acceptance:** every `index.yaml` row has a corresponding `references/PXXXX.md`; deep-tier examples pass `clang -std=c++2c -fsyntax-only` where compiler supports the feature (skip-when-unsupported is acceptable).
+
+#### 1d. Compiler status table (½ day)
+
+- Write `corpus/status.yaml` covering clang-22, clang-p2996, gcc-16, msvc-19.40 for **deep tier only** (shallow/stub default to "unknown"). Source: clang/gcc/MSVC cxx-status pages + Bloomberg `clang-p2996` README.
+- Add `corpus/scripts/refresh_status.py` (manual-run, prints diffs vs current file).
+
+**Acceptance:** all deep-tier features have rows for the four compilers.
+
+#### 1e. Validation pass (½ day)
+
+- CI job `tools/validate_corpus.py`:
+  - Schema-check frontmatter (required keys present, tier ∈ {deep,shallow,stub}).
+  - Extract fenced `cpp` blocks from deep-tier files; run each through `clang -std=c++2c -fsyntax-only`. Pass/skip/fail per snippet.
+  - Lint: every `index.yaml` id has a `references/` file; no orphan files.
+- Read 10 random shallow files end-to-end; fix issues.
+
+**Acceptance:** validator clean; zero parse-failures on examples in deep-tier where compiler claims full support.
 
 ---
 
-### Phase 4 — Layer C: Reviewer subagent (4–5 days)
+### Phase 2 — Skill: `cpp26-idioms` (1.5 days, runs partly parallel to Phase 1c)
 
-`agents/cpp26-reviewer.md` — a Claude Code subagent with explicit two-pass logic.
+`skills/cpp26-idioms/SKILL.md` ≤ 300 lines.
 
-#### 4a. Agent spec (1 day)
+Structure:
+- **Frontmatter** (`name`, `description` — must be model-discoverable).
+- **Constitution** (≤10 lines): "generate against the standard, not the compiler" + how to handle compiler-lag.
+- **Decision table** (~20 rows): C++26 idiom → pre-C++26 equivalent → paper ID → "see `references/PXXXX.md`". Built from the deep-tier list — can be drafted from PLAN.md §3 today.
+- **Anti-pattern flag list** (~10 patterns): `assert(`, `BOOST_DESCRIBE_`, `std::async(`, hand-written enum→string switch, etc.
+- **When to ignore** (legacy project signals, embedded targets, test code consistency).
+- **MCP usage hints** ("for canonical syntax, call `mcp__cpp26-ref__lookup_paper`").
 
-YAML frontmatter:
+`skills/cpp26-idioms/references/` is a symlink or copy of `corpus/references/` — skills can ship their own references for progressive disclosure. Decide via testing whether to symlink (dev) and copy (release) or just point the skill at `../../corpus/references/` via relative path. **Pin choice:** at package time, the build script copies; in dev, symlink.
+
+**Acceptance:** SKILL.md renders cleanly; decision table covers all deep-tier idioms; running Claude with the skill loaded and asking "write enum-to-string" produces reflection-based code on ≥3/3 manual trials.
+
+---
+
+### Phase 3 — MCP server: `cpp26-ref` (2 days)
+
+Minimal stdio MCP server in `mcp-server/src/cpp26_ref/server.py`. **No SQLite, no sentence-transformers.**
+
+Tools (3, not 6):
+
+```python
+@mcp.tool
+def lookup_paper(paper_id: str) -> str:
+    """Return the full markdown content of references/<paper_id>.md."""
+
+@mcp.tool
+def search(query: str, top_k: int = 5) -> list[dict]:
+    """Keyword + fuzzy match across index.yaml (title, keywords, category).
+    Returns [{id, title, tier, score, path}, ...]. Backed by rapidfuzz."""
+
+@mcp.tool
+def compiler_status(paper_id: str, compiler: str | None = None) -> dict:
+    """Read corpus/status.yaml. INFORMATIONAL ONLY — skill must not gate
+    on this."""
+```
+
+Implementation:
+- Load `corpus/index.yaml` and `corpus/status.yaml` into memory at startup (~50 KB total — trivial).
+- `lookup_paper`: `pathlib` read of `references/<id>.md`; raise if missing.
+- `search`: `rapidfuzz.process.extract` over (`title` + `keywords` + `category`) strings; weight `title` ×2.
+- `compiler_status`: dict lookup; default `unknown` if absent.
+
+Tests in `mcp-server/tests/`:
+- One unit test per tool against a 5-feature fixture corpus.
+- One integration test: spin server via stdio, invoke each tool, assert response shape.
+
+`.mcp.json` at repo root:
+```json
+{
+  "mcpServers": {
+    "cpp26-ref": {
+      "command": "python",
+      "args": ["-m", "cpp26_ref.server"],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}/mcp-server/src"
+    }
+  }
+}
+```
+
+**Acceptance:** all 3 tools work end-to-end; cold start < 500 ms; lookup < 50 ms; tests green.
+
+**Dependency:** Phase 1a (`index.yaml` schema) and 1c (at least 5 references for tests). Can start when Phase 1a lands.
+
+---
+
+### Phase 4 — Reviewer subagent: `cpp26-reviewer` (2 days)
+
+`agents/cpp26-reviewer.md`. Markdown subagent.
+
+Frontmatter:
 ```yaml
 name: cpp26-reviewer
-description: Review a C++ file or diff for C++26 standard compliance.
-  Runs two passes: standard-compliance (always) and compiler-check (informational).
-  Returns structured pass/fail with classification.
-tools: [Read, Bash, Grep, mcp__cpp26-ref__*]
+description: Reviews a C++ file or diff for C++26 standard compliance.
+  Two-pass: standard-compliance regex check (always) and clang compile
+  check (informational, classifies bug vs compiler-lag).
+tools: [Read, Bash, Grep, mcp__cpp26-ref__lookup_paper, mcp__cpp26-ref__compiler_status]
 model: sonnet
 ```
 
-#### 4b. Pass 1 — standard compliance (1.5 days)
+Body: explicit prompt covering both passes, the classification rules, and the YAML output schema.
 
-Detect "C++23 fallback" patterns. Two-stage detection:
+**Pass 1 — anti-pattern regex (in agent body + helper script `tools/cpp26_lint/quick_lint.sh`):**
 
-**Stage 1 — regex (v0.1):**
-```python
-PATTERNS = [
-    (r'\bassert\s*\(', "use contract_assert instead", "P2900"),
-    (r'\bBOOST_DESCRIBE_', "use reflection instead", "P2996"),
-    (r'\bstd::async\s*\(', "use std::execution sender instead", "P2300"),
-    (r'#define\s+\w+\s*\([^)]*\).+\\$', "consider reflection/template for", "P2996/P1306"),
-    # ... ~20 patterns
-]
+```yaml
+# tools/cpp26_lint/patterns.yaml
+- pattern: '\bassert\s*\('
+  suggest: "use contract_assert"
+  paper: P2900
+- pattern: '\bBOOST_DESCRIBE_'
+  suggest: "use std::meta reflection"
+  paper: P2996
+- pattern: '\bstd::async\s*\('
+  suggest: "use std::execution sender"
+  paper: P2300
+# ~15 more, one per deep-tier idiom
 ```
 
-**Stage 2 — clang-tidy custom checks (v0.2, later):**
-- AST-based detection (more accurate, slower to write)
-- Migrate from regex incrementally
+Script reads file, emits findings as `{line, pattern, suggest, paper}` JSON. Agent invokes the script via Bash.
 
-#### 4c. Pass 2 — compiler check (1.5 days)
+**Pass 2 — compiler check:**
 
-- Invoke `clangd` via LSP (or `clang -fsyntax-only` for simpler integration)
-- Parse diagnostics
-- For each diagnostic, cross-reference `corpus/status.yaml`:
-  - If feature mentioned in error is "not supported by this compiler" → classify `compiler-lag`
-  - Otherwise → classify `bug`
+- Agent runs `clang -std=c++2c -fsyntax-only -Werror <file> 2>&1 | tee /tmp/cpp26-diag.txt`.
+- For each diagnostic, agent reasons: extract referenced symbol/feature → call `compiler_status(paper_id, compiler)` → if `support: none|partial` → classify `compiler-lag`; else `bug`.
+- Conservative default: unknown → `bug`.
 
-Conservative bias: only classify as `compiler-lag` when `status.yaml` explicitly says "not supported." Default → `bug`.
-
-#### 4d. Output schema
+**Output schema** (agent returns this verbatim):
 
 ```yaml
 status: pass | needs-changes | compiler-lag-only
 standard_compliance:
   pass: true
-  antipatterns: []          # list of (line, pattern, suggestion, paper_ref)
+  antipatterns:
+    - { line: 42, pattern: "assert(", suggest: "contract_assert", paper: P2900 }
 compile_check:
   pass: false
-  bugs: []                  # genuine errors
-  compiler_lag: []          # errors caused by missing compiler support
-    # each entry: { line, feature, paper, "expected in <compiler> <version>" }
+  bugs: []
+  compiler_lag:
+    - { line: 17, feature: "std::meta::reflect", paper: P2996,
+        compiler: "clang-22", note: "expected in clang-25 or use bloomberg/clang-p2996" }
 ```
 
-#### 4e. Tests (1 day)
+**Tests:** `agents/tests/fixtures/` — 10 snippets (5 clean C++26, 5 with anti-patterns or compiler-lag triggers), each with expected classification. CI script invokes the agent (via `claude -p ...` or a unit harness against the regex script alone) and asserts.
 
-- [ ] Fixture: 10 C++ snippets (5 clean C++26, 5 with deliberate anti-patterns)
-- [ ] Each snippet has expected classification
-- [ ] CI runs the agent against the fixture; assert classifications match
-
-**Acceptance:** ≥90% classification accuracy on fixture; zero false-negatives on bugs.
+**Acceptance:** ≥90% classification accuracy on fixtures; **zero false-negatives on bugs** (over-classifying as bug is fine; under-classifying is not).
 
 ---
 
-### Phase 5 — Layer D: Build integration (1–2 days)
+### Phase 5 — Hooks + slash command (1 day)
 
-#### 5a. `/cpp26-init` slash command (½ day)
-
-`commands/cpp26-init.md`. When invoked:
-- Emit `CMakeLists.txt` (or patch existing) with:
-  - `set(CMAKE_CXX_STANDARD 26)`
-  - `add_compile_options(-std=c++2c)`
-  - `set(CMAKE_EXPORT_COMPILE_COMMANDS ON)`
-- Emit `.clangd` with toolchain pointer
-- Emit `.cpp26-adapter.yaml` (project-local overrides)
-- Update README with toolchain expectations
-
-#### 5b. Hooks (`hooks/hooks.json`) (½ day)
-
+`hooks/hooks.json`:
 ```json
 {
   "hooks": {
-    "SessionStart": [{
-      "command": "tools/check_toolchain.sh",
-      "description": "Verify clang ≥22; warn if older"
-    }],
-    "PostToolUse": [{
-      "matcher": "Edit",
-      "filePattern": "*.{cpp,h,hpp,cxx,cc}",
-      "command": "tools/quick_lint.sh",
-      "description": "Fast regex-based Pass-1 check"
-    }]
+    "SessionStart": [
+      { "command": "${CLAUDE_PLUGIN_ROOT}/tools/check_toolchain.sh",
+        "description": "Detect C++ toolchain; warn if clang<22 or gcc<16" }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write",
+        "filePattern": "*.{cpp,h,hpp,cxx,cc}",
+        "command": "${CLAUDE_PLUGIN_ROOT}/tools/cpp26_lint/quick_lint.sh",
+        "description": "Pass-1 regex anti-pattern check" }
+    ]
   }
 }
 ```
 
-#### 5c. Toolchain probe + lint scripts (½ day)
+`commands/cpp26-init.md` (slash command):
+- Detect existing `CMakeLists.txt`; if absent, scaffold one with `set(CMAKE_CXX_STANDARD 26)` + `add_compile_options(-std=c++2c)` + `CMAKE_EXPORT_COMPILE_COMMANDS ON`.
+- Write `.clangd` pointing at the user-preferred toolchain.
+- Write `.cpp26-adapter.yaml` (project overrides — e.g., "skip-skill: true" for legacy modules).
+- Append to README a "C++26 toolchain expectations" section.
 
-- [ ] `tools/check_toolchain.sh` — detects clang version, reports
-- [ ] `tools/quick_lint.sh` — regex-based subset of Pass 1, fast
+`tools/check_toolchain.sh`: prints clang/gcc/msvc versions; emits a stderr line if all below thresholds (Claude surfaces this on SessionStart).
 
-**Acceptance:** `/cpp26-init` produces a buildable CMake project; hooks fire on edits.
+`tools/cpp26_lint/quick_lint.sh`: reads target file path from `$CLAUDE_TOOL_INPUT` (or hook payload); runs the regex pass; emits findings to stdout (Claude surfaces them).
+
+**Acceptance:** `/cpp26-init` on an empty dir produces a buildable CMake project; PostToolUse hook fires and prints findings on an edit that introduces `assert(`.
 
 ---
 
-### Phase 6 — Plugin packaging (½ day)
+### Phase 6 — Packaging & local install test (½ day)
 
-- [ ] Write `.claude-plugin/plugin.json`:
+- Finalize `.claude-plugin/plugin.json`:
 ```json
 {
   "name": "cpp26-adapter",
   "version": "1.0.0",
   "description": "Turn Claude into a C++26 specialist via standard-first idiom bias, reference MCP, and verification.",
-  "author": { "name": "Paris Moschovakos" }
+  "author": { "name": "Paris Moschovakos" },
+  "components": {
+    "skills": ["skills/cpp26-idioms"],
+    "agents": ["agents/cpp26-reviewer.md"],
+    "commands": ["commands/cpp26-init.md"],
+    "hooks": "hooks/hooks.json",
+    "mcpServers": ".mcp.json"
+  }
 }
 ```
-- [ ] Wire `.mcp.json` to spawn the local MCP server
-- [ ] Document install in README
-- [ ] Test `/plugin install` on a clean Claude Code instance
+- Write `tools/package.sh`: copies `corpus/references/` into `skills/cpp26-idioms/references/`, tars the repo, prints install size.
+- Test `/plugin install` from a local marketplace on a clean Claude Code (a second machine or a fresh user account).
 
-**Acceptance:** clean install on a second machine; full feature path works end-to-end.
+**Acceptance:** clean install on a second environment; full feature path (skill → MCP lookup → review) works end-to-end; install tarball < 5 MB.
 
 ---
 
-### Phase 7 — Eval & iteration (3–4 days)
+### Phase 7 — Eval suite & iteration (3–4 days)
 
-This is where most plugins stall (ship, no iteration). Plan for it explicitly.
+This is the gate. **DoD bar: 85% standard-compliance on the held suite.**
 
-#### 7a. Eval suite (1 day)
+#### 7a. Build eval suite (1 day)
 
-30 representative C++ tasks. Each covers a major-tier rule from the skill:
+`eval/tasks.yaml`: 40 tasks, ≥1 per deep-tier idiom, ≥1 per category. Each:
+```yaml
+- id: enum-to-string
+  prompt: "Write enum-to-string for enum class Color { Red, Green, Blue }; that returns std::string_view."
+  rule_tested: P2996
+  expected_idiom: "uses std::meta or template for; does not use X-macros, switch, or magic_enum"
+  must_not_contain: ["#define", "magic_enum", "switch.*case.*Red"]
+  must_contain: ["std::meta", "^^"]
+```
 
-| # | Task | Tests rule |
-|---|---|---|
-| 1 | "Write enum-to-string for `enum class Color { Red, Green, Blue };`" | reflection (P2996) |
-| 2 | "Add precondition `n > 0` to this function" | contracts (P2900) |
-| 3 | "Make this function fan-out async" | senders/receivers (P2300) |
-| 4 | "Serialize this struct to JSON" | reflection (P2996) |
-| 5 | "Implement compile-time loop over members" | template for (P1306) |
-| 6 | "Embed a binary file as compile-time data" | #embed (P1967) |
-| 7 | "Type-safe variadic visitor" | pack indexing (P2662) |
-| 8 | "Delete this constructor with reason" | = delete("reason") (P2573) |
-| ... | ... | ... |
+#### 7b. Eval harness (½ day)
 
-#### 7b. Run eval, plugin OFF vs ON (½ day)
-
-- [ ] Run all 30 tasks twice (with/without plugin)
-- [ ] Score outputs on 3 axes:
-  - **Standard compliance:** uses C++26 idiom or fallback? (binary)
-  - **Syntactic correctness:** parses under clang `-std=c++2c`? (binary)
-  - **Idiomatic quality:** LLM-judged 1–5
-- [ ] Record in `eval/results-v0.1.md`
+`eval/run.py`:
+- For each task, invoke Claude twice (plugin OFF, plugin ON) via `claude -p`.
+- Score each output on three axes:
+  1. **Standard compliance (binary):** uses C++26 idiom or fallback? (regex on must_contain/must_not_contain)
+  2. **Syntactic correctness (binary):** parses under `clang -std=c++2c -fsyntax-only`?
+  3. **Idiomatic quality (1–5):** LLM-judge with rubric (`claude -p` against a judge prompt).
+- Write `eval/results-vX.Y.md`.
 
 #### 7c. Iterate (2–3 days)
 
-- [ ] Identify systematic failures (e.g., LLM keeps using `assert` despite skill)
-- [ ] Strengthen skill prose for those cases
-- [ ] If still failing → hook-enforced injection (PostToolUse hook auto-amends generated code)
-- [ ] Re-run eval until ≥85% standard-compliance
+- Identify systematic failures (e.g., model keeps reaching for `assert`).
+- Strengthen SKILL.md decision table for failing cases.
+- Add more anti-pattern regexes if a class of failure can be deterministically caught.
+- If model still ignores skill → tighten `description` frontmatter (skill activation depends on it).
+- Last resort: a PostToolUse hook that auto-prepends a steering note when an anti-pattern is detected mid-generation.
+- Re-run eval until ≥85% on axis 1 (the DoD axis).
 
-**Acceptance v0.1:** 70% correct idiom selection. **Acceptance v1.0:** 90%.
+**Acceptance:** `eval/results-v1.0.md` shows ≥85% standard-compliance, ≥80% syntactic correctness (compiler-lag features can fail Pass 2 and still count as pass on axis 1), median idiomatic-quality ≥4/5.
 
 ---
 
 ### Phase 8 — Distribution (1 day)
 
-Decision (locked from earlier): **publish.** Three sub-options to choose between:
+- Push to `parasxos/claude-plugins` as a personal marketplace (`marketplace.json` with one entry).
+- Verify `/plugin install cpp26-adapter@parasxos/claude-plugins` works from someone else's machine.
+- Write the announcement: short README delta + a `docs/architecture.md` with the diagram and the "standard-first" rationale (this is the differentiator vs other C++ plugins).
+- Optional, post-v1.0: submit to `wshobson/agents` or Anthropic's official marketplace.
 
-| Option | Effort | Reach |
+**Acceptance:** plugin discoverable via personal marketplace; ≥1 external installer before declaring v1.0 done.
+
+---
+
+### Phase 9 — Maintenance scaffolding (½ day at v1.0, ~1 day/quarter ongoing)
+
+- `tools/refresh.sh`: runs `fetch_index.py` (diff against `index.yaml`, emit new-paper rows), `refresh_status.py` (diff compiler-status pages), `eval/run.py`. Output: a `MAINTENANCE.md` checklist with hand-actionable items.
+- GitHub Action (or local cron): monthly run of `tools/refresh.sh`, opens an issue if diffs are non-empty.
+- Document quarterly process in `MAINTENANCE.md`: (1) merge new C++26 defect-report papers, (2) refresh compiler status, (3) re-run eval, (4) bump corpus version in `index.yaml` header.
+
+**Acceptance:** `MAINTENANCE.md` exists; running `tools/refresh.sh` on day 0 produces an empty checklist (clean baseline).
+
+---
+
+## Effort summary
+
+| Phase | Effort | Calendar position |
+|---|---:|---|
+| 0. Setup | ½ d | day 1 |
+| 1. Corpus | 6–8 d | weeks 1–2 (long pole) |
+| 2. Skill | 1.5 d | week 2 (parallel with 1c) |
+| 3. MCP | 2 d | week 2–3 (after 1a) |
+| 4. Reviewer | 2 d | week 3 |
+| 5. Hooks + /init | 1 d | week 3 |
+| 6. Packaging | ½ d | week 4 |
+| 7. Eval + iterate | 3–4 d | week 4 (gate) |
+| 8. Distribution | 1 d | week 4 |
+| 9. Maintenance scaffold | ½ d | week 4 |
+| **Total** | **~18–22 focused days** | 2–3 mo calendar |
+
+Buffer (3–7 days) absorbs the corpus slog overrunning and the eval-iteration loop.
+
+---
+
+## Critical files to be created/modified
+
+| Path | Phase | Purpose |
 |---|---|---|
-| Personal marketplace (your GitHub repo as a marketplace) | ½ day | Anyone you tell |
-| Submit to `wshobson/agents` (claude-code-workflows) | 1 day + review wait | Curated audience |
-| Submit to `anthropics/claude-plugins-official` | 1 day + review wait | Maximum discoverability |
-
-Recommend: personal marketplace first (`parasxos/claude-plugins`), then submit to one or both upstream marketplaces once v1.0 is stable.
-
-Companion artifacts:
-- [ ] Blog post on the architecture (post to `/r/cpp`, isocpp.org, Hacker News)
-- [ ] Demo video (5 min): show "before" vs "after" on 3 representative tasks
-- [ ] Public eval results
-
-**Acceptance:** plugin discoverable via at least one marketplace; ≥1 external user before declaring success.
+| `.claude-plugin/plugin.json` | 0, 6 | Manifest |
+| `.mcp.json` | 3 | MCP server registration |
+| `corpus/index.yaml` | 1a | Master 150-row index |
+| `corpus/references/PXXXX.md` | 1c | Per-feature reference (markdown + frontmatter) |
+| `corpus/status.yaml` | 1d | Compiler-status matrix (deep-tier only) |
+| `corpus/scripts/fetch_index.py` | 1a | GitHub API → index.yaml |
+| `corpus/scripts/fetch_papers.py` | 1b | wg21.link → raw cache |
+| `corpus/scripts/refresh_status.py` | 1d, 9 | Diff compiler-status pages |
+| `tools/validate_corpus.py` | 1e | CI schema + example syntax check |
+| `skills/cpp26-idioms/SKILL.md` | 2 | The constitution + decision table |
+| `skills/cpp26-idioms/references/` | 2, 6 | Symlink (dev) / copy (release) of corpus refs |
+| `mcp-server/src/cpp26_ref/server.py` | 3 | 3-tool MCP, in-memory load |
+| `mcp-server/pyproject.toml` | 0, 3 | Deps: `mcp`, `pyyaml`, `pydantic`, `rapidfuzz` |
+| `mcp-server/tests/` | 3 | Per-tool unit + integration tests |
+| `agents/cpp26-reviewer.md` | 4 | Two-pass reviewer subagent |
+| `agents/tests/fixtures/` | 4 | 10 classified snippets |
+| `tools/cpp26_lint/patterns.yaml` | 4 | Regex anti-pattern table |
+| `tools/cpp26_lint/quick_lint.sh` | 4, 5 | Regex pass invokable from hook/agent |
+| `tools/check_toolchain.sh` | 5 | SessionStart probe |
+| `hooks/hooks.json` | 5 | SessionStart + PostToolUse wiring |
+| `commands/cpp26-init.md` | 5 | `/cpp26-init` slash command |
+| `tools/package.sh` | 6 | Release tarball build |
+| `eval/tasks.yaml` | 7a | 40-task suite |
+| `eval/run.py` | 7b | Harness, 3-axis scoring |
+| `eval/results-v1.0.md` | 7c | Eval gate evidence |
+| `tools/refresh.sh` | 9 | Quarterly maintenance entry point |
+| `MAINTENANCE.md` | 9 | Operator checklist |
 
 ---
 
-### Phase 9 — Maintenance (ongoing, ~1 day/quarter)
+## Verification
 
-- [ ] Monthly cron: diff `cplusplus/papers` for new "C++26" issues (defect reports, corrigenda)
-- [ ] Quarterly: refresh `corpus/status.yaml` from compiler release notes
-- [ ] Re-run eval suite quarterly; track regressions
-- [ ] Triage incoming GitHub issues (if public)
-- [ ] Add new idiom patterns as they emerge in real use
+End-to-end, before declaring v1.0:
+
+1. **Fresh install on a second environment:**
+   `/plugin install cpp26-adapter@parasxos/claude-plugins` → confirm skill, MCP, agent, hooks, command all register (`/plugin` listing, `/agents` listing, `/mcp` listing).
+2. **Skill activation:** open a fresh session in a C++ project; ask "write enum-to-string for `enum class E { A, B }`" without mentioning C++26. Confirm output uses `std::meta` / `template for` (not X-macros).
+3. **MCP lookup:** ask "what's the canonical reflection example?" → Claude calls `mcp__cpp26-ref__lookup_paper("P2996")` (visible in tool-use trace) and returns content from `references/P2996.md`.
+4. **Reviewer happy path:** invoke `@cpp26-reviewer` on a clean C++26 file → `status: pass`.
+5. **Reviewer anti-pattern:** invoke on a file with `assert(x > 0);` → `status: needs-changes`, antipattern entry references P2900.
+6. **Reviewer compiler-lag:** invoke on a reflection snippet under clang 22 → `status: compiler-lag-only`, lag entry references P2996.
+7. **Slash command:** `/cpp26-init` in empty dir → produces buildable `CMakeLists.txt` (verify with `cmake -B build && cmake --build build` against a hello-world `main.cpp`).
+8. **Hooks fire:** edit a `.cpp` file to introduce `BOOST_DESCRIBE_STRUCT` → PostToolUse surfaces a P2996 anti-pattern finding.
+9. **SessionStart probe:** start session on a box with clang 21 → warning surfaces; with clang 22+ → silent.
+10. **Eval gate:** `python eval/run.py` → `results-v1.0.md` shows ≥85% on axis 1.
+11. **Validator green:** `python tools/validate_corpus.py` → exit 0.
+12. **Tests green:** `pytest mcp-server/tests` and reviewer fixture harness → all pass.
 
 ---
 
-## 4. Risk register
+## Risk register
 
 | # | Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|---|
-| 1 | Paper extraction harder than scoped | High | Medium | Tier system; hand-curate top 30 only; auto-extract rest |
-| 2 | LLM ignores the skill despite prose | Medium | High | Eval suite + iteration; hook-enforced injection as fallback |
-| 3 | Compiler status data goes stale | Certain | Low | Quarterly refresh documented; staleness surfaced in MCP responses |
-| 4 | Bloomberg clang-p2996 diverges from P2996 | Medium | Medium | Track revision in corpus; refresh on new R |
-| 5 | Reviewer false-positives on real bugs (`compiler-lag` classification) | Medium | High | Conservative default: only classify lag when `status.yaml` says so |
-| 6 | Skill over-applies to legacy projects | Medium | Low | "When to ignore" section + project detection |
-| 7 | Maintainer burnout | Medium | High | Distribution strategy determines surface area; recruit help via issues |
-| 8 | C++26 amended post-publication | Low | Medium | Use `cplusplus/draft` HEAD as truth; refresh periodically |
-| 9 | MCP latency too high (lookups feel slow) | Low | Medium | SQLite + in-memory vector index; target <100ms |
-| 10 | Eval over-fits to test tasks | Medium | Medium | Diverse task set; rotate examples between releases |
+|---|---|:-:|:-:|---|
+| 1 | Deep-tier corpus extraction blows the schedule | H | M | Tier rebalance (20 deep, not 30); LLM-assist shallow tier; defer 5 deep papers to v1.1 if needed |
+| 2 | Skill ignored despite prose | M | H | Eval gate forces iteration; hook-enforced steering as last resort; frontmatter `description` carefully tuned for activation |
+| 3 | Compiler-status data goes stale fast | Certain | L | Quarterly `refresh.sh`; staleness banner in MCP responses; reviewer surfaces `last_refreshed` |
+| 4 | Bloomberg `clang-p2996` diverges from P2996 final | M | M | Track revision in status.yaml; refresh on each new R |
+| 5 | Reviewer mis-classifies real bug as compiler-lag | M | H | Conservative default `bug` when status is unknown; fixture has explicit false-positive cases |
+| 6 | Skill over-applies to legacy C++23 codebases | M | L | "When to ignore" section; `/cpp26-init` writes `.cpp26-adapter.yaml` override; detect existing `CXX_STANDARD < 26` |
+| 7 | Maintainer burnout (solo) | M | H | Maintenance scaffold (`refresh.sh`) front-loaded; quarterly cadence, not monthly |
+| 8 | C++26 amended post-publication (defect reports) | L | M | Refresh script diffs `cplusplus/papers` issue list |
+| 9 | MCP search quality poor without embeddings | M | L | Start with rapidfuzz + keyword weights; upgrade to embeddings only if eval shows lookup failures dominating |
+| 10 | Eval over-fits to test tasks | M | M | 40 tasks across all deep-tier rules; rotate 25% between minor releases |
+| 11 | Plugin install path differs across Claude Code surfaces (CLI vs web vs IDE) | L | M | Test on at least CLI + one IDE before v1.0 announce |
+| 12 | Skill `references/` symlink breaks on package step | L | L | `tools/package.sh` copies, doesn't symlink; CI checks for dangling links pre-release |
 
 ---
 
-## 5. Total effort
-
-| Phase | Effort | Calendar (1 FTE) |
-|---|---|---|
-| 0. Setup | ½ day | day 1 |
-| 1. Corpus | 5–8 days | weeks 1–2 |
-| 2. MCP | 3 days | week 2 |
-| 3. Skill | 1–2 days | week 2 (parallel) |
-| 4. Reviewer | 4–5 days | week 3 |
-| 5. Build integration | 1–2 days | week 3 |
-| 6. Packaging | ½ day | week 4 |
-| 7. Eval & iterate | 3–4 days | week 4 |
-| 8. Distribution | 1 day | week 4 |
-| **Total** | **~20–25 days** | **4 weeks focused** |
-
-Realistic calendar around CERN work: **2–3 months.**
-
----
-
-## 6. Decision log
-
-| Date | Decision | Rationale |
-|---|---|---|
-| 2026-05-20 | Project home: `~/code/parasxos/plugins/cpp26-adapter/` | New repo under personal GitHub namespace, room for future plugins |
-| 2026-05-20 | Scope: full plan, all 4 layers, ~150 features | Maximum ambition; tiered depth keeps it tractable |
-| 2026-05-20 | Storage: YAML in git + SQLite at install | YAML readable in PRs, SQLite fast at query time |
-| 2026-05-20 | Compiler-aware in Layer C only | Per user's standard-first policy invariant |
-| 2026-05-20 | License: MIT code, CC-BY-SA 4.0 corpus | Corpus derives partly from cppreference (CC-BY-SA); compatible |
-
----
-
-## 7. Open questions
-
-These don't block Phase 0–1 but should be resolved before Phase 4 or 7:
-
-1. **Bloomberg clang-p2996 — bundle or just reference?** Recommend reference; users install themselves.
-2. **Should reviewer agent block PR merges or just warn?** v1.0 = warn only; v2.0 may add merge-blocking via CI integration.
-3. **Library scope final cut.** Confirm `std::linalg` and `std::execution` are major-tier worth full curation, or shallow-tier.
-4. **Distribution timing.** Personal marketplace at v0.1 or only at v1.0?
-
----
-
-## 8. Glossary
-
-- **Final form** — the version of a paper voted into ISO/IEC 14882:2026.
-- **Standard-first policy** — recommendations follow the standard, never the compiler.
-- **Compiler-lag** — a compile failure caused by the compiler not yet implementing a C++26 feature; classified as informational, not a bug.
-- **Tier** — corpus depth tier (major/minor/editorial).
-- **MCP** — Model Context Protocol; how Claude Code talks to the reference server.
-- **LSP** — Language Server Protocol; how Claude Code talks to clangd.
-- **WG21** — ISO C++ standards committee.
-- **Paper ID** — WG21 reference like `P2996`. Latest revision suffixed: `P2996R13`.
-
----
-
-*End of binding plan. Implementation begins Phase 0.*
+*End of binding plan.*

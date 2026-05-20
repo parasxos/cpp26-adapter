@@ -1,0 +1,10 @@
+{
+  "name": "cpp26-adapter",
+  "version": "0.0.1",
+  "description": "Turn Claude into a C++26 specialist via standard-first idiom bias, reference MCP, and verification.",
+  "author": {
+    "name": "Paris Moschovakos",
+    "email": "parasxos@gmail.com"
+  },
+  "homepage": "https://github.com/parasxos/claude-plugins"
+}

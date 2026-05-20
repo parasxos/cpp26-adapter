@@ -16,21 +16,23 @@ Pre-implementation. See [`PLAN.md`](PLAN.md) for the binding implementation plan
 
 ```
 .claude-plugin/   plugin.json manifest
-agents/           cpp26-reviewer subagent
-skills/           cpp26-idioms (Layer B)
-hooks/            PostToolUse, SessionStart
+agents/           cpp26-reviewer subagent (two-pass: regex + clang -fsyntax-only)
+skills/           cpp26-idioms — the constitution + decision table
+hooks/            PostToolUse (anti-pattern lint) + SessionStart (toolchain probe)
 commands/         /cpp26-init slash command
-mcp-server/       Layer A — Python FastMCP reference server
-corpus/           the C++26 knowledge base (papers, features, status)
-tools/            custom clang-tidy / regex checks for Layer C
+mcp-server/       cpp26-ref MCP server (3 stdio tools, in-memory)
+corpus/           the C++26 knowledge base (index.yaml, references/, status.yaml)
+tools/            regex anti-pattern lint + helper scripts
+eval/             eval suite + harness (added in Phase 7)
 ```
 
 ## Install (once built)
 
 ```
-/plugin install cpp26-adapter@<marketplace-tbd>
+/plugin install cpp26-adapter@parasxos/claude-plugins
 ```
 
 ## License
 
-TBD — likely MIT for code, CC-BY-SA 4.0 for corpus (cppreference-derived material).
+- **Code** (everything outside `corpus/`): MIT — see [`LICENSE-CODE`](LICENSE-CODE).
+- **Knowledge corpus** (`corpus/`): CC BY-SA 4.0 — see [`LICENSE-CORPUS`](LICENSE-CORPUS).
