@@ -3,6 +3,7 @@
 **Turn your LLM coding assistant into a C++26 specialist.**
 A Claude Code plugin that biases generation toward ISO/IEC 14882:2026 final-form idioms — reflection, contracts, senders, `inplace_vector`, `#embed` — even when your local clang hasn't caught up.
 
+[![ci](https://github.com/parasxos/cpp26-adapter/actions/workflows/ci.yml/badge.svg)](https://github.com/parasxos/cpp26-adapter/actions/workflows/ci.yml)
 [![version](https://img.shields.io/badge/version-v0.9.0-blue)](https://github.com/parasxos/cpp26-adapter/releases/tag/v0.9.0)
 [![eval](https://img.shields.io/badge/eval-37%2F39%20(95%25)-brightgreen)](eval/results-v0.9.0.md)
 [![bar](https://img.shields.io/badge/bar-%E2%89%A585%25-success)](eval/results-v0.9.0.md)
