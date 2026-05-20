@@ -1,6 +1,6 @@
 {
   "name": "cpp26-adapter",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Turn Claude into a C++26 specialist via standard-first idiom bias, reference MCP, and verification. Recommendations follow ISO/IEC 14882:2026 even where the local toolchain lags.",
   "author": {
     "name": "Paris Moschovakos",

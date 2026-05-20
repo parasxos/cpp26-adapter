@@ -43,16 +43,16 @@ description: |
 | iterate non-static data members | reflection + `template for` | Boost.PFR, codegen, `std::apply` on `std::tie` | P2996 | `corpus/references/P2996.md` |
 | function precondition / postcondition | `pre(cond)` / `post(r : cond)` / `contract_assert(cond)` | `assert(cond)` | P2900 | `corpus/references/P2900.md` |
 | concurrent / async pipeline | `std::execution` sender chain (`then`, `let_value`, `when_all`, `sync_wait`) | `std::async` / `std::future::get` chaining | P2300 | `corpus/references/P2300.md` |
-| compile-time loop over heterogeneous sequence | `template for (auto&& x : t)` | recursive variadic templates, `std::apply` + fold | P1306 | `corpus/references/P1306.md` |
+| compile-time loop over heterogeneous sequence (tuple, pack, reflected range) | `template for (auto&& x : t)` — **reach for this over fold expressions when the loop body has more than one statement, branches, or needs the index** | recursive variadic templates, `std::apply` + fold expression, `(f(args), ...)` when you actually want a loop body | P1306 | `corpus/references/P1306.md` |
 | N-th element of a parameter pack | `args...[N]` / `Ts...[N]` | `std::get<N>(std::forward_as_tuple(args...))` | P2662 | `corpus/references/P2662.md` |
 | diagnostic on deleted overload | `= delete("reason")` | `= delete;` + comment, or SFINAE `static_assert(false)` | P2573 | `corpus/references/P2573.md` |
 | befriend a pack of types | `friend Ts...;` | hand-listed `friend A; friend B; …` | P2893 | `corpus/references/P2893.md` |
 | embed a binary asset | `#embed "path"` | pre-build codegen, `objcopy --add-section`, `incbin` | P1967 | `corpus/references/P1967.md` |
 | avoid UB on uninitialized read | leave the variable default; opt out with `[[indeterminate]]` only when measured-worth-it | manual `= 0` everywhere | P2795 | `corpus/references/P2795.md` |
-| dense linear algebra | `std::linalg::*` on `std::mdspan` | Eigen, Armadillo, vendor BLAS direct calls | P1673 | `corpus/references/P1673.md` |
+| dense linear algebra (any matrix/vector operation: multiply, dot, AXPY, …) | `std::linalg::*` on `std::mdspan` — **call this library by name** (`std::linalg::matrix_product`, `std::linalg::add`, `std::linalg::dot`) | Eigen, Armadillo, vendor BLAS direct calls, **and also** hand-written triple-for loops over `std::mdspan` (those are pre-C++26 even when the view is C++23) | P1673 | `corpus/references/P1673.md` |
 | lock-free reclamation, read-mostly | `std::rcu_*` (`rcu_obj_base`, `synchronize_rcu`) | `folly::rcu`, `liburcu`, ad-hoc epoch | P2545 | `corpus/references/P2545.md` |
 | lock-free reclamation, write-heavy | `std::hazard_pointer` + `hazard_pointer_obj_base` | `folly::hazptr`, hand-rolled epoch | P2530 | `corpus/references/P2530.md` |
-| portable bounds-checked containers | build with `-D__STDCPP_HARDENING_MODE` | `gsl::span`, `_GLIBCXX_DEBUG`, hand-rolled wrappers | P3471 | `corpus/references/P3471.md` |
+| portable bounds-checked containers | build with `-D__STDCPP_HARDENING_MODE=…` — **this is the C++26 standard macro**; vendor-specific spellings (`_LIBCPP_HARDENING_MODE`, `_GLIBCXX_DEBUG`, `_GLIBCXX_ASSERTIONS`, `/D_ITERATOR_DEBUG_LEVEL`) are the pre-C++26 path that P3471 replaces | `gsl::span`, `_GLIBCXX_DEBUG`, `_LIBCPP_HARDENING_MODE`, hand-rolled wrappers | P3471 | `corpus/references/P3471.md` |
 | signal errors inside `constexpr` | `throw`/`try`/`catch` in constant evaluation | return `std::expected<T, E>`, sentinels | P3068 | `corpus/references/P3068.md` |
 | anonymous / unused binding | `auto _ = …;` (any number of `_`) | `auto _ [[maybe_unused]] = …`, `(void)x;` | P2169 | `corpus/references/P2169.md` |
 | fixed-capacity vector on the stack | `std::inplace_vector<T, N>` | `boost::container::static_vector`, `std::array` + size | P0843 | `corpus/references/P0843.md` |

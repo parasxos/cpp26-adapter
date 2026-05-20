@@ -9,12 +9,77 @@ on two successive eval-passing refreshes.
 
 ## [Unreleased]
 
-- Discoverability: GitHub repo topics added (claude-code,
-  claude-code-plugin, cpp26, mcp-server, wg21, …).
-- Issue templates under `.github/ISSUE_TEMPLATE/` for install
-  confirmations, eval task suggestions, and bug reports.
-- Announcement bundle at `docs/announce/RELEASE_PREP.md` covering HN,
-  r/cpp, r/ClaudeAI, Mastodon/Bluesky/X, and LinkedIn channels.
+…
+
+## [0.9.1] — 2026-05-20
+
+Second corpus refresh + harness-bug fixes uncovered during the second
+gate-pass attempt. The refresh itself was a no-op on the corpus
+(no new C++26 papers since 2026-05-20 morning); the changes here are
+targeted improvements identified by auditing the second-run failures.
+
+### Why the second run dropped to 33/39 (84.62%)
+
+The same harness that produced 37/39 (95%) on the first refresh
+returned 33/39 (84.62%) on a back-to-back run. Auditing the 6 ON
+failures revealed:
+
+  - **1 harness bug**: when the model used `Write`/`Edit` tools to
+    save code to a `.cpp` file in the harness's temp cwd instead of
+    showing it in chat, the harness never saw the actual code and
+    scored against the empty narrative response. (`constexpr-parse-int`.)
+  - **1 regex too pedantic**: `enum-to-string` required the literal
+    `std::meta` token; the model emitted unqualified
+    `enumerators_of(^^E)` / `identifier_of(e)` calls — also valid
+    C++26 (with the `std::meta` namespace brought into scope) —
+    and the regex missed.
+  - **3 stochastic variance**: tasks that passed on run 1 and failed
+    on run 2 with the same harness. The model's outputs vary
+    meaningfully across calls, and the eval bar sits inside that
+    variance window.
+  - **2 real plugin gaps**: `matrix-multiply` (model emitted raw
+    triple-for loops over `std::mdspan` instead of
+    `std::linalg::matrix_product`) and `enable-hardening-cmake`
+    (model emitted vendor-specific `_LIBCPP_HARDENING_MODE` instead
+    of the C++26 standard `__STDCPP_HARDENING_MODE`).
+
+### Changes
+
+- **eval/run.py**: every prompt now carries an
+  `INLINE_SUFFIX` asking the model to respond inline in a fenced
+  cpp block rather than calling `Write`/`Edit`. Closes the
+  file-writing-tool blindspot above. Targeted fix; does not change
+  what's tested, only how it's observed.
+- **eval/tasks.yaml**: `enum-to-string` `must_contain` accepts
+  `std::meta|enumerators_of|identifier_of` (any of the three
+  reflection-API calls counts) plus the `^^` reflection operator.
+  The original `std::meta` token was a false-strict requirement.
+- **skills/cpp26-idioms/SKILL.md** decision-table tightenings on
+  three rows previously under-emphasising the C++26 bias:
+    - `dense linear algebra` — explicit call-out that
+      `std::linalg::matrix_product` / `dot` / `add` should be reached
+      for *by name*, and that hand-written loops over `std::mdspan`
+      remain a pre-C++26 anti-pattern.
+    - `portable bounds-checked containers` — `__STDCPP_HARDENING_MODE`
+      is named as the standard form with `_LIBCPP_HARDENING_MODE` /
+      `_GLIBCXX_DEBUG` / `_ITERATOR_DEBUG_LEVEL` listed under the
+      anti-pattern column.
+    - `compile-time loop over heterogeneous sequence` — explicit
+      that `template for` should beat fold expressions
+      (`(f(args), …)`) when the body is more than one statement.
+
+### Refresh evidence
+
+- `corpus/index.yaml`: regenerated; no diff vs the v0.9.0 state.
+- `corpus/status.yaml`: no diff vs the v0.9.0 state (no new
+  upstream compiler shipments in the interval).
+- `tools/validate_corpus.py`: schema CLEAN, xref CLEAN, syntax
+  PASS=10 SKIP=38 FAIL=0 (same as v0.9.0).
+- `eval/archive/`: both runs preserved.
+    - `results-v0.9.0-2026-05-20-first-pass.md` — 37/39 (95%)
+    - `results-v0.9.0-2026-05-20-second-pass.md` — 33/39 (84.62%)
+- `eval/results-v0.9.1.md`: third run with the harness/skill fixes
+  above (results captured at run time).
 
 ## [0.9.0] — 2026-05-20
 

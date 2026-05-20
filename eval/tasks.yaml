@@ -21,7 +21,10 @@
     that returns the name of an enum value. Handle any enum class.
   rule_tested: P2996
   expected_idiom: "Uses std::meta + template for; not X-macros, switch, or magic_enum."
-  must_contain: ["std::meta", "\\^\\^"]
+  # Accept either qualified `std::meta::*` calls or unqualified
+  # reflection-API calls (enumerators_of / identifier_of / define_static_array)
+  # — both are valid given a using-declaration or ADL.
+  must_contain: ["std::meta|enumerators_of|identifier_of", "\\^\\^"]
   must_not_contain: ["magic_enum", "#define\\s+X_MACRO", "case\\s+\\w+::\\w+\\s*:\\s*return\\s+\""]
 
 - id: struct-field-iteration

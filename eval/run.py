@@ -109,11 +109,22 @@ class TaskResult:
     elapsed_s: float = 0.0
 
 
+INLINE_SUFFIX = (
+    "\n\nIMPORTANT: respond inline in this chat with your code shown in a "
+    "fenced ```cpp``` block. Do not use Write/Edit tools — keep the answer "
+    "as plain text so it can be reviewed without file IO."
+)
+
+
 def call_claude(prompt: str, plugin_dir: Path | None, timeout: int = 300) -> tuple[str, int]:
     cmd: list[str] = ["claude", "-p", "--output-format", "text"]
     if plugin_dir is not None:
         cmd += ["--plugin-dir", str(plugin_dir)]
-    cmd += [prompt]
+    # Append the inline-response suffix so the model returns code in the
+    # chat stream rather than calling Write/Edit. Without this, file-writing
+    # responses make the harness blind to the actual code (one of the false
+    # ON-failures in the second refresh — see the constexpr-parse-int audit).
+    cmd += [prompt + INLINE_SUFFIX]
     with tempfile.TemporaryDirectory() as cwd:
         try:
             r = subprocess.run(
