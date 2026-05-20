@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -47,6 +48,22 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+# When both an API key and an OAuth subscription credential exist, the
+# Claude CLI prefers the API key — which bills per-token. For an eval
+# loop we want the subscription path (keychain OAuth) instead, so we
+# strip these env vars before invoking `claude -p`. Override with
+# CPP26_EVAL_USE_API=1 to opt back into API billing.
+_API_AUTH_ENVS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+
+
+def _subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    if os.environ.get("CPP26_EVAL_USE_API") == "1":
+        return env
+    for k in _API_AUTH_ENVS:
+        env.pop(k, None)
+    return env
 
 ROOT = Path(__file__).resolve().parent.parent
 TASKS_PATH = ROOT / "eval" / "tasks.yaml"
@@ -100,7 +117,8 @@ def call_claude(prompt: str, plugin_dir: Path | None, timeout: int = 300) -> tup
     with tempfile.TemporaryDirectory() as cwd:
         try:
             r = subprocess.run(
-                cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout,
+                cmd, cwd=cwd, env=_subprocess_env(),
+                capture_output=True, text=True, timeout=timeout,
             )
             return r.stdout, r.returncode
         except subprocess.TimeoutExpired:
