@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build / dist
+build/
+dist/
+*.sqlite
+*.db
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Corpus cache (raw fetched papers — large; rebuildable)
+corpus/raw/*.html
+corpus/raw/*.pdf
+corpus/raw/*.bs
+!corpus/raw/.gitkeep
+
+# Built SQLite from YAML corpus
+corpus/cpp26.sqlite
+
+# Local Claude artifacts
+.claude/
