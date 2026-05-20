@@ -97,9 +97,14 @@ EXPECTED=(
     "cpp26-adapter/corpus/status.yaml"
     "cpp26-adapter/tools/cpp26_lint/patterns.yaml"
 )
+# Read the listing once. Piping `tar -tzf` directly into `grep -q` is
+# unsafe under `set -o pipefail`: grep closes its stdin after the first
+# match, tar gets SIGPIPE, the pipeline exits non-zero — and `! …`
+# inverts that into a false "MISSING" report. Reading once dodges it.
+TAR_LISTING=$(tar -tzf "$OUTPUT")
 missing=0
 for entry in "${EXPECTED[@]}"; do
-    if ! tar -tzf "$OUTPUT" | grep -qx "$entry"; then
+    if ! grep -qxF "$entry" <<<"$TAR_LISTING"; then
         echo "  MISSING: $entry" >&2
         missing=$((missing+1))
     fi
