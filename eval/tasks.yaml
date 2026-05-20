@@ -1,0 +1,446 @@
+# Eval suite for cpp26-adapter (Phase 7a).
+#
+# 40 tasks, ≥1 per deep-tier idiom and ≥1 per category. Each task has:
+#   id              short identifier
+#   category        bucket (reflection | contracts | concurrency | core |
+#                   library | numerics | cross-cutting)
+#   prompt          the user-facing prompt the model receives. Phrased to
+#                   AVOID naming C++26 or the paper — the test is whether
+#                   the model reaches for the C++26 idiom unprompted.
+#   rule_tested     paper id this task gates on
+#   expected_idiom  prose describing the C++26 form expected
+#   must_contain    regex tokens the response *must* include (at least one)
+#   must_not_contain regex tokens the response *must not* include (pre-C++26
+#                   anti-patterns)
+
+# ===== P2996 reflection (4 tasks) =====
+- id: enum-to-string
+  category: reflection
+  prompt: |
+    Write a C++ function template<typename E> std::string_view enum_name(E v)
+    that returns the name of an enum value. Handle any enum class.
+  rule_tested: P2996
+  expected_idiom: "Uses std::meta + template for; not X-macros, switch, or magic_enum."
+  must_contain: ["std::meta", "\\^\\^"]
+  must_not_contain: ["magic_enum", "#define\\s+X_MACRO", "case\\s+\\w+::\\w+\\s*:\\s*return\\s+\""]
+
+- id: struct-field-iteration
+  category: reflection
+  prompt: |
+    Write a C++ function `void dump(const T& obj)` that prints each
+    non-static data member's name and value, one per line. T is any
+    aggregate struct.
+  rule_tested: P2996
+  expected_idiom: "Uses std::meta::nonstatic_data_members_of + template for + splice."
+  must_contain: ["nonstatic_data_members_of", "template for"]
+  must_not_contain: ["BOOST_DESCRIBE", "boost::pfr", "magic_get"]
+
+- id: serialize-to-json
+  category: reflection
+  prompt: |
+    Write a generic to_json(const T&) for any aggregate struct in C++.
+    Output should be a std::string with the JSON representation.
+  rule_tested: P2996
+  expected_idiom: "Reflection-driven (template for over members_of)."
+  must_contain: ["std::meta", "template for"]
+  must_not_contain: ["BOOST_DESCRIBE", "boost::pfr", "nlohmann::adl_serializer"]
+
+- id: template-args-of
+  category: reflection
+  prompt: |
+    Given a class template specialization T (e.g. std::vector<int>),
+    write a function that returns std::string_view of the first template
+    argument's name. Do not use __PRETTY_FUNCTION__.
+  rule_tested: P2996
+  expected_idiom: "Uses std::meta::template_arguments_of."
+  must_contain: ["std::meta", "template_arguments_of|\\^\\^"]
+  must_not_contain: ["__PRETTY_FUNCTION__", "boost::typeindex"]
+
+# ===== P2900 contracts (3 tasks) =====
+- id: precondition-check
+  category: contracts
+  prompt: |
+    Write a C++ function `int divide(int a, int b)` that returns a / b.
+    It is a programming error to call it with b == 0. Express that
+    expectation in the function signature.
+  rule_tested: P2900
+  expected_idiom: "Uses pre(b != 0)."
+  must_contain: ["pre\\s*\\(", "b\\s*!=\\s*0"]
+  must_not_contain: ["assert\\s*\\("]
+
+- id: postcondition-result
+  category: contracts
+  prompt: |
+    Write `int abs(int x)` and express in the signature that the return
+    value is non-negative.
+  rule_tested: P2900
+  expected_idiom: "Uses post(r : r >= 0)."
+  must_contain: ["post\\s*\\(", "r\\s*>=\\s*0"]
+  must_not_contain: ["assert\\s*\\("]
+
+- id: in-body-assertion
+  category: contracts
+  prompt: |
+    In the body of a C++ function, check an invariant that x > 0 before
+    proceeding. Use the modern checked-assertion construct.
+  rule_tested: P2900
+  expected_idiom: "Uses contract_assert(x > 0)."
+  must_contain: ["contract_assert"]
+  must_not_contain: ["\\bassert\\s*\\("]
+
+# ===== P2300 std::execution (3 tasks) =====
+- id: simple-async-pipeline
+  category: concurrency
+  prompt: |
+    Build a small asynchronous pipeline in C++ that starts with the
+    value 7, multiplies by 6, and waits synchronously for the result.
+  rule_tested: P2300
+  expected_idiom: "Uses ex::just | ex::then | ex::sync_wait."
+  must_contain: ["std::execution|namespace ex", "sync_wait"]
+  must_not_contain: ["std::async\\s*\\(", "std::future"]
+
+- id: concurrent-fanout
+  category: concurrency
+  prompt: |
+    Fetch two values concurrently (call get_a() and get_b() — both
+    blocking) and merge them. Use the modern composition primitives.
+  rule_tested: P2300
+  expected_idiom: "Uses when_all + sync_wait."
+  must_contain: ["when_all"]
+  must_not_contain: ["std::async\\s*\\(", "std::future"]
+
+- id: scheduler-bound-work
+  category: concurrency
+  prompt: |
+    Schedule a piece of CPU-bound work on a thread pool in modern C++
+    (not std::thread, not std::async).
+  rule_tested: P2300
+  expected_idiom: "Uses static_thread_pool + scheduler + schedule()."
+  must_contain: ["schedule|scheduler"]
+  must_not_contain: ["std::async\\s*\\(", "std::thread\\s*\\("]
+
+# ===== P1306 expansion statements (2 tasks) =====
+- id: tuple-sum
+  category: core
+  prompt: |
+    Write a constexpr function that sums every element of an arbitrary
+    std::tuple<T...>. Assume all elements support +=.
+  rule_tested: P1306
+  expected_idiom: "Uses template for over the tuple."
+  must_contain: ["template for"]
+  must_not_contain: ["std::apply\\s*\\(", "std::index_sequence"]
+
+- id: visit-every-pack-element
+  category: core
+  prompt: |
+    Write a function `void visit_all(F f, Args... args)` that calls f
+    on each element of the pack at compile time.
+  rule_tested: P1306
+  expected_idiom: "Uses template for (auto&& a : {args...})."
+  must_contain: ["template for"]
+  must_not_contain: ["index_sequence"]
+
+# ===== P2662 pack indexing (2 tasks) =====
+- id: nth-pack-element
+  category: core
+  prompt: |
+    Write `template <auto N, typename... Ts> auto nth(Ts... ts)`
+    returning the N-th argument by value.
+  rule_tested: P2662
+  expected_idiom: "Uses ts...[N] (pack indexing)."
+  must_contain: ["\\.\\.\\.\\s*\\["]
+  must_not_contain: ["std::get\\s*<.*>\\s*\\(\\s*std::forward_as_tuple"]
+
+- id: type-pack-index
+  category: core
+  prompt: |
+    Given `typename... Ts`, declare a type alias for the I-th type in
+    the pack without indirecting through std::tuple_element.
+  rule_tested: P2662
+  expected_idiom: "Uses Ts...[I]."
+  must_contain: ["\\.\\.\\.\\s*\\["]
+  must_not_contain: ["tuple_element"]
+
+# ===== P2573 = delete reason (1 task) =====
+- id: delete-with-reason
+  category: core
+  prompt: |
+    Make a struct NotCopyable non-copyable, but provide a useful
+    diagnostic on the compiler error that tells the user to use std::move.
+  rule_tested: P2573
+  expected_idiom: 'Uses = delete("…explanation…").'
+  must_contain: ["=\\s*delete\\s*\\(\\s*\""]
+  must_not_contain: ["static_assert\\(false"]
+
+# ===== P2893 variadic friends (1 task) =====
+- id: variadic-friend-plugins
+  category: core
+  prompt: |
+    Write a class template Engine<typename... Plugins> that grants each
+    plugin type access to a private member `int internal_state_`.
+  rule_tested: P2893
+  expected_idiom: "Uses friend Plugins...;."
+  must_contain: ["friend\\s+\\w+\\s*\\.\\.\\.\\s*;"]
+  must_not_contain: ["friend\\s+A\\s*;\\s+friend\\s+B"]
+
+# ===== P1967 #embed (2 tasks) =====
+- id: embed-binary-asset
+  category: core
+  prompt: |
+    Embed the bytes of a file "assets/icon.png" as a constexpr
+    std::array<unsigned char, N> in C++.
+  rule_tested: P1967
+  expected_idiom: "Uses #embed."
+  must_contain: ["#\\s*embed\\s+\""]
+  must_not_contain: ["objcopy", "xxd\\s+-i", "incbin"]
+
+- id: conditional-embed
+  category: core
+  prompt: |
+    Conditionally embed a file's bytes into a C++ translation unit only
+    if the file exists; otherwise use an empty initializer.
+  rule_tested: P1967
+  expected_idiom: "Uses __has_embed + #embed."
+  must_contain: ["__has_embed", "#\\s*embed"]
+  must_not_contain: ["fstream\\s*\\(", "objcopy"]
+
+# ===== P2795 erroneous (1 task) =====
+- id: safe-uninit-read
+  category: core
+  prompt: |
+    A function accumulates into a local `int total` from a loop body.
+    Show the idiomatic C++26 way to declare the local so reads are
+    safe by default.
+  rule_tested: P2795
+  expected_idiom: 'Leaves the local default-initialized (no explicit = 0); does NOT use [[indeterminate]] unless asked.'
+  must_not_contain: ["\\[\\[indeterminate\\]\\]"]
+  must_contain: ["int\\s+total\\s*;", "for"]
+
+# ===== P1673 std::linalg (2 tasks) =====
+- id: matrix-multiply
+  category: numerics
+  prompt: |
+    Write a function in modern C++ that multiplies two 3x3 float
+    matrices A and B into C, given raw pointers `const float* a`,
+    `const float* b`, `float* c`. Use the standard library, not Eigen.
+  rule_tested: P1673
+  expected_idiom: "Uses std::linalg::matrix_product on std::mdspan views."
+  must_contain: ["std::linalg", "mdspan"]
+  must_not_contain: ["Eigen::Map", "cblas_sgemm"]
+
+- id: axpy
+  category: numerics
+  prompt: |
+    Implement AXPY (y = α·x + y) on float arrays in modern C++ using
+    the standard library.
+  rule_tested: P1673
+  expected_idiom: "Uses std::linalg::add + std::linalg::scaled on mdspan."
+  must_contain: ["std::linalg", "scaled|add"]
+  must_not_contain: ["cblas_saxpy"]
+
+# ===== P2530 hazard pointers (1 task) =====
+- id: hazard-protected-read
+  category: library
+  prompt: |
+    Implement a lock-free read of an atomic<Node*> in C++ where Node
+    is dynamically allocated and writers retire stale nodes. Use the
+    standard library reclamation primitive suited for high write rates.
+  rule_tested: P2530
+  expected_idiom: "Uses std::hazard_pointer + hazard_pointer_obj_base."
+  must_contain: ["hazard_pointer", "retire"]
+  must_not_contain: ["folly::hazptr", "liburcu"]
+
+# ===== P2545 RCU (1 task) =====
+- id: rcu-snapshot
+  category: library
+  prompt: |
+    Implement a read-mostly atomic snapshot of a configuration struct
+    in C++, where writers replace the snapshot and readers must see
+    a consistent version. Use the standard library reclamation
+    primitive suited for read-mostly workloads.
+  rule_tested: P2545
+  expected_idiom: "Uses std::rcu_obj_base + rcu_default_domain."
+  must_contain: ["rcu_obj_base|rcu_default_domain|synchronize_rcu"]
+  must_not_contain: ["folly::rcu", "liburcu"]
+
+# ===== P3471 hardening (1 task) =====
+- id: enable-hardening
+  category: library
+  prompt: |
+    What is the portable, standard way to enable bounds-checking and
+    other library hardening in C++26?
+  rule_tested: P3471
+  expected_idiom: "Mentions __STDCPP_HARDENING_MODE (build-time macro)."
+  must_contain: ["__STDCPP_HARDENING_MODE"]
+  must_not_contain: ["_LIBCPP_HARDENING_MODE", "_GLIBCXX_DEBUG"]
+
+# ===== P3068 constexpr throw (1 task) =====
+- id: constexpr-parse-int
+  category: core
+  prompt: |
+    Write a constexpr `int parse(std::string_view)` that throws
+    std::invalid_argument on non-numeric input.
+  rule_tested: P3068
+  expected_idiom: "Body uses throw/try/catch directly inside constexpr."
+  must_contain: ["constexpr", "throw"]
+  must_not_contain: ["std::expected", "std::optional<int>"]
+
+# ===== P2169 placeholder (2 tasks) =====
+- id: unused-binding
+  category: core
+  prompt: |
+    Call expensive_call_returning_unused_value(). Suppress any
+    unused-variable warning in C++26.
+  rule_tested: P2169
+  expected_idiom: "Uses auto _ = …;"
+  must_contain: ["auto\\s+_\\s*="]
+  must_not_contain: ["\\(void\\)", "\\[\\[maybe_unused\\]\\]"]
+
+- id: multiple-placeholders
+  category: core
+  prompt: |
+    Given std::tuple<int, std::string, double> get_record(), bind
+    only the first and last elements.
+  rule_tested: P2169
+  expected_idiom: "Uses auto [x, _, y] = ...;"
+  must_contain: ["auto\\s*\\[.*,\\s*_,.*\\]"]
+  must_not_contain: ["\\(void\\)\\s*[A-Za-z_]"]
+
+# ===== P0843 inplace_vector (2 tasks) =====
+- id: fixed-capacity-vector
+  category: library
+  prompt: |
+    Implement a function that buffers up to 64 Packet objects on the
+    stack (no heap), processes a batch when full, then continues.
+    Use the modern standard container for this.
+  rule_tested: P0843
+  expected_idiom: "Uses std::inplace_vector<Packet, 64>."
+  must_contain: ["std::inplace_vector"]
+  must_not_contain: ["boost::container::static_vector", "std::vector"]
+
+- id: embedded-noexcept-push
+  category: library
+  prompt: |
+    On an embedded target, push a message into a 16-slot stack buffer
+    without throwing on overflow. Use the modern standard container.
+  rule_tested: P0843
+  expected_idiom: "Uses std::inplace_vector::try_push_back."
+  must_contain: ["std::inplace_vector", "try_push_back"]
+  must_not_contain: ["boost::container::static_vector"]
+
+# ===== cross-cutting (10 tasks) =====
+- id: refactor-assert-loop
+  category: cross-cutting
+  prompt: |
+    The following code uses `assert(b != 0)` and `assert(a >= 0)`.
+    Modernize it to C++26.
+    ```
+    int divide(int a, int b) {
+        assert(b != 0);
+        assert(a >= 0);
+        return a / b;
+    }
+    ```
+  rule_tested: P2900
+  expected_idiom: "Replaces with pre/contract_assert."
+  must_contain: ["pre|contract_assert"]
+  must_not_contain: ["\\bassert\\s*\\("]
+
+- id: refactor-boost-describe
+  category: cross-cutting
+  prompt: |
+    Convert this Boost.Describe-based struct printer to modern C++26.
+    ```
+    struct Point { int x; int y; };
+    BOOST_DESCRIBE_STRUCT(Point, (), (x, y));
+    // … prints fields generically via boost::describe::describe_members
+    ```
+  rule_tested: P2996
+  expected_idiom: "Uses reflection."
+  must_contain: ["std::meta|template for"]
+  must_not_contain: ["BOOST_DESCRIBE"]
+
+- id: refactor-std-async
+  category: cross-cutting
+  prompt: |
+    Modernize this code to use modern composition primitives.
+    ```
+    auto fa = std::async(std::launch::async, [] { return compute_a(); });
+    auto fb = std::async(std::launch::async, [] { return compute_b(); });
+    return merge(fa.get(), fb.get());
+    ```
+  rule_tested: P2300
+  expected_idiom: "Uses senders + when_all + sync_wait."
+  must_contain: ["when_all|sync_wait"]
+  must_not_contain: ["std::async", "std::future"]
+
+- id: explain-template-for
+  category: cross-cutting
+  prompt: |
+    Explain when to use `template for` versus a regular range-for in
+    modern C++.
+  rule_tested: P1306
+  expected_idiom: "Mentions compile-time iteration over heterogeneous sequences (tuples, packs, reflected ranges)."
+  must_contain: ["template for", "heterogeneous|compile-time|reflect"]
+  must_not_contain: []
+
+- id: embedded-buffer
+  category: cross-cutting
+  prompt: |
+    For an embedded firmware target (no heap allocation, freestanding),
+    declare a 32-slot buffer of int that supports push/pop semantics.
+  rule_tested: P0843
+  expected_idiom: "Uses std::inplace_vector<int, 32>."
+  must_contain: ["std::inplace_vector|inplace_vector"]
+  must_not_contain: ["std::vector", "boost::"]
+
+- id: unique-overload-message
+  category: cross-cutting
+  prompt: |
+    In a C++26 DSL, prevent users from calling `sleep(double)` (only
+    `sleep(int)` is valid). Surface a clear compile-error message
+    pointing them at the integer overload.
+  rule_tested: P2573
+  expected_idiom: 'Uses = delete("…").'
+  must_contain: ["=\\s*delete\\s*\\("]
+  must_not_contain: ["static_assert\\(\\s*false"]
+
+- id: pack-element-zero
+  category: cross-cutting
+  prompt: |
+    Given variadic args... how do you peek at the first one without
+    iterating, in modern C++?
+  rule_tested: P2662
+  expected_idiom: "args...[0]"
+  must_contain: ["\\.\\.\\.\\[0\\]"]
+  must_not_contain: ["forward_as_tuple"]
+
+- id: enable-hardening-cmake
+  category: cross-cutting
+  prompt: |
+    What flag do I add to CMAKE_CXX_FLAGS to turn on portable C++26
+    library hardening?
+  rule_tested: P3471
+  expected_idiom: "Mentions -D__STDCPP_HARDENING_MODE=… (standard macro)."
+  must_contain: ["__STDCPP_HARDENING_MODE"]
+  must_not_contain: ["_LIBCPP_HARDENING_MODE\\b"]
+
+- id: portable-bytes-include
+  category: cross-cutting
+  prompt: |
+    Include the contents of a binary file as a constexpr array in C++
+    without a separate codegen step.
+  rule_tested: P1967
+  expected_idiom: "Uses #embed."
+  must_contain: ["#\\s*embed"]
+  must_not_contain: ["objcopy", "xxd"]
+
+- id: reflection-vs-magic-enum
+  category: cross-cutting
+  prompt: |
+    A teammate suggests adopting magic_enum for our C++26 codebase to
+    convert enums to strings. What's the recommendation?
+  rule_tested: P2996
+  expected_idiom: "Recommends reflection-based approach over magic_enum."
+  must_contain: ["std::meta|reflection|^^"]
+  must_not_contain: []

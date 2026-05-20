@@ -29,3 +29,6 @@ corpus/raw/fetch_log.json
 
 # Local Claude artifacts
 .claude/
+
+# Eval run artefacts (regenerable from eval/run.py)
+eval/results-*.md
