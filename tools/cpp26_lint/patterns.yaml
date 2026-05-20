@@ -1,0 +1,97 @@
+# Anti-pattern → C++26 idiom mapping table.
+#
+# Each row is a regex applied line-by-line to C++ source files; matches
+# are surfaced as Pass-1 findings by `quick_lint.py` (and by the
+# PostToolUse hook). The regex flavour is Python `re` — escape backslashes
+# accordingly.
+#
+# Severity: 'warning' (suggest a fix) or 'info' (educational note).
+# Patterns that would produce false positives in legitimate code should
+# be marked 'info' so the user is not alarmed.
+
+- pattern: '\bassert\s*\('
+  suggest: "use contract_assert(cond), pre(cond), or post(r : cond)"
+  paper: P2900
+  severity: warning
+
+- pattern: '\bBOOST_DESCRIBE_(STRUCT|CLASS|ENUM)\b'
+  suggest: "use std::meta reflection (^^E, [: :], members_of, template for)"
+  paper: P2996
+  severity: warning
+
+- pattern: '\bmagic_enum\s*::'
+  suggest: "use std::meta::enumerators_of + template for"
+  paper: P2996
+  severity: warning
+
+- pattern: '\bstd::async\s*\('
+  suggest: "use std::execution senders (ex::just | ex::then | ex::sync_wait)"
+  paper: P2300
+  severity: warning
+
+- pattern: '\bboost::container::static_vector\b'
+  suggest: "use std::inplace_vector<T, N>"
+  paper: P0843
+  severity: warning
+
+- pattern: '\bstd::get\s*<\s*\d+\s*>\s*\(\s*std::forward_as_tuple'
+  suggest: "use pack-indexing: args...[N]"
+  paper: P2662
+  severity: warning
+
+# `= delete;` immediately followed by a // explanation comment is the
+# anti-pattern the proposer cited as motivation for `= delete("reason")`.
+- pattern: '=\s*delete\s*;\s*//'
+  suggest: 'use = delete("reason") so the explanation appears in the diagnostic'
+  paper: P2573
+  severity: warning
+
+# (void)foo; used for unused-arg suppression — overlaps with legitimate
+# uses (e.g., suppressing nodiscard), so info-level only.
+- pattern: '\(\s*void\s*\)\s*[A-Za-z_][A-Za-z0-9_]*\s*;'
+  suggest: "for unused bindings, use placeholder name `auto _ = …;` (any number of `_` allowed)"
+  paper: P2169
+  severity: info
+
+- pattern: '\b__attribute__\s*\(\s*\(\s*used\s*\)\s*\)'
+  suggest: "no C++26 replacement; this is fine. Skip the warning."
+  paper: ""
+  severity: info
+
+- pattern: '\bgsl::span\s*<'
+  suggest: "enable library hardening via -D__STDCPP_HARDENING_MODE for portable bounds checks"
+  paper: P3471
+  severity: info
+
+# objcopy-based asset embedding in *source* would be unusual; this catches
+# the common comment pattern documenting an external embed step.
+- pattern: '\bobjcopy\b.*--add-section'
+  suggest: "use #embed \"path\" instead of an objcopy build step"
+  paper: P1967
+  severity: warning
+
+- pattern: '#\s*include\s+"incbin\.h"'
+  suggest: "use #embed \"path\" instead of incbin"
+  paper: P1967
+  severity: warning
+
+# Recursive variadic walker: `template <typename T, typename... Ts>` with a
+# function body that recurses on `Ts...`. The signature is a strong hint;
+# false positives are possible, hence info-level.
+- pattern: 'template\s*<\s*typename\s+\w+\s*,\s*typename\s*\.\.\.\s*\w+\s*>'
+  suggest: "compile-time iteration over a pack is `template for (auto&& x : pack)`"
+  paper: P1306
+  severity: info
+
+# Manually walking an enum via switch to convert to a string — the
+# canonical use-case the reflection example replaces.
+- pattern: 'case\s+\w+\s*::\s*\w+\s*:\s*return\s+"[^"]*"\s*;'
+  suggest: "consider reflection-based enum_name (std::meta::enumerators_of + template for)"
+  paper: P2996
+  severity: info
+
+# Hand-rolled std::forward_as_tuple + std::apply: replaceable by template for.
+- pattern: '\bstd::apply\s*\(\s*\['
+  suggest: "for compile-time iteration prefer template for over std::apply + lambda"
+  paper: P1306
+  severity: info

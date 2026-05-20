@@ -1,0 +1,33 @@
+# Expected Pass-1 outcomes for each reviewer fixture.
+#
+# - `clean_*` files must produce zero warning-severity findings; info-severity
+#   findings are tolerated (they're educational nudges, not violations).
+# - `bad_*` files must produce >=1 warning-severity finding, and at least one
+#   of those findings must reference the paper listed under `expected_papers`.
+
+clean_01_reflection.cpp:
+  warning_count: 0
+clean_02_contracts.cpp:
+  warning_count: 0
+clean_03_senders.cpp:
+  warning_count: 0
+clean_04_inplace.cpp:
+  warning_count: 0
+clean_05_embed.cpp:
+  warning_count: 0
+
+bad_01_assert.cpp:
+  min_warnings: 1
+  expected_papers: [P2900]
+bad_02_boost_describe.cpp:
+  min_warnings: 1
+  expected_papers: [P2996]
+bad_03_async.cpp:
+  min_warnings: 1
+  expected_papers: [P2300]
+bad_04_static_vector.cpp:
+  min_warnings: 1
+  expected_papers: [P0843]
+bad_05_magic_enum.cpp:
+  min_warnings: 1
+  expected_papers: [P2996]
