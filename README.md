@@ -4,9 +4,9 @@
 A Claude Code plugin that biases generation toward ISO/IEC 14882:2026 final-form idioms — reflection, contracts, senders, `inplace_vector`, `#embed` — even when your local clang hasn't caught up.
 
 [![ci](https://github.com/parasxos/cpp26-adapter/actions/workflows/ci.yml/badge.svg)](https://github.com/parasxos/cpp26-adapter/actions/workflows/ci.yml)
-[![version](https://img.shields.io/badge/version-v0.9.0-blue)](https://github.com/parasxos/cpp26-adapter/releases/tag/v0.9.0)
-[![eval](https://img.shields.io/badge/eval-37%2F39%20(95%25)-brightgreen)](eval/results-v0.9.0.md)
-[![bar](https://img.shields.io/badge/bar-%E2%89%A585%25-success)](eval/results-v0.9.0.md)
+[![version](https://img.shields.io/badge/version-v0.9.1-blue)](https://github.com/parasxos/cpp26-adapter/releases/tag/v0.9.1)
+[![eval](https://img.shields.io/badge/eval-35%2F39%20(90%25)-brightgreen)](eval/results-v0.9.1.md)
+[![bar](https://img.shields.io/badge/bar-%E2%89%A585%25-success)](eval/results-v0.9.1.md)
 [![standard](https://img.shields.io/badge/ISO%2FIEC-14882%3A2026-orange)](https://www.iso.org/standard/83626.html)
 [![code license](https://img.shields.io/badge/code-MIT-green)](LICENSE-CODE)
 [![corpus license](https://img.shields.io/badge/corpus-CC--BY--SA--4.0-green)](LICENSE-CORPUS)
