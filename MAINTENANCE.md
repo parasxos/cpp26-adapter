@@ -95,6 +95,14 @@ README.md             ← user-facing layout overview
 MAINTENANCE.md        ← this file
 ```
 
+## Plugin naming convention
+
+For any future plugin landing on `parasxos/claude-plugins`:
+
+- Form: `<domain>-<verb-or-noun>` (e.g. `cpp26-adapter`, `cern-dcs-toolkit`, `comms-orchestrator`).
+- No `paris-` / `parasxos-` / `claude-` prefix — the marketplace URL already namespaces.
+- All lowercase, hyphen-separated.
+
 ## Version bumps
 
 SemVer 2.0:
