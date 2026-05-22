@@ -1,7 +1,7 @@
 {
   "name": "cpp26-adapter",
   "version": "0.9.2",
-  "description": "Turn Claude into a C++26 specialist via standard-first idiom bias, reference MCP, and verification. Recommendations follow ISO/IEC 14882:2026 even where the local toolchain lags.",
+  "description": "Turn Claude into a C++26 specialist — reflection, contracts, senders, #embed, expansion statements. Standard-first: suggests the C++26 form even when clang/gcc lag.",
   "author": {
     "name": "Paris Moschovakos",
     "email": "parasxos@gmail.com"
