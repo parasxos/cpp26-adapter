@@ -16,10 +16,24 @@ permissions:
   contents: read
 
 jobs:
-  validate-and-test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  # Universal lifecycle (install → pytest → package + size budget) lives
+  # in the shared reusable workflow at parasxos/.github. Plugin-specific
+  # steps (corpus validator, index ↔ refs consistency) follow below.
+  shared:
+    uses: parasxos/.github/.github/workflows/plugin-ci.yml@main
+    with:
+      python-version: '3.11'
+      install-spec: 'mcp-server[dev]'
+      test-paths: 'mcp-server/tests agents/tests'
+      run-package: true
+      package-script: 'tools/package.sh'
+      tarball-glob: 'dist/cpp26-adapter-*.tgz'
+      size-budget-kb: 5120
 
+  corpus-consistency:
+    name: corpus consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
@@ -29,14 +43,10 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install mcp-server (editable, with dev deps)
+      - name: Install mcp-server (for pyyaml)
         run: |
           python -m pip install --upgrade pip
           pip install -e "mcp-server[dev]"
-
-      - name: pytest — MCP server + reviewer fixtures
-        run: |
-          pytest -q mcp-server/tests agents/tests
 
       - name: validate_corpus — schema + xref (skip syntax pass; no C++26-capable clang in CI)
         run: |
@@ -56,31 +66,3 @@ jobs:
               sys.exit(1)
           print(f"OK — {len(rows)} index rows, {len(refs)} reference files")
           PY
-
-  package-and-size-check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    needs: validate-and-test
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build release tarball
-        run: bash tools/package.sh
-
-      - name: Size budget (≤ 5 MB per PLAN.md §6)
-        run: |
-          tar=$(ls dist/cpp26-adapter-*.tgz | head -1)
-          size_kb=$(( $(stat -c%s "$tar") / 1024 ))
-          echo "tarball: $tar ($size_kb KB)"
-          if (( size_kb > 5120 )); then
-            echo "::error::tarball $size_kb KB exceeds 5 MB budget"
-            exit 1
-          fi
-
-      - name: Upload tarball as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cpp26-adapter-release-tarball
-          path: dist/cpp26-adapter-*.tgz
-          retention-days: 30
