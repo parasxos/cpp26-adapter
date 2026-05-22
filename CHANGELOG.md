@@ -11,6 +11,40 @@ on two successive eval-passing refreshes.
 
 …
 
+## [0.9.2] — 2026-05-22
+
+Hooks schema correctness fix.
+
+### Why
+
+A check against the live Claude Code 2.1.148 hook docs revealed the v0.9.0
+/ v0.9.1 `hooks/hooks.json` carried two schema bugs:
+
+1. The `filePattern` field is **not a recognized field** in the current
+   hook schema (docs explicitly: *"`filePattern` is NOT a recognized
+   field. File filtering is done through the `if` field using permission
+   rule syntax"*). The field was silently ignored — so the PostToolUse
+   Pass-1 anti-pattern lint was firing on **every** `Edit` / `Write` /
+   `NotebookEdit`, not just on C++ files. Wasted compute and risk of
+   regex false-positives in markdown / YAML / Python / etc.
+2. The hook entries were structured flat (matcher + command directly).
+   The current schema nests a typed `hooks: [{type: "command", ...}]`
+   array inside the matcher group.
+
+### Changes
+
+- **hooks/hooks.json** rewritten against the current schema:
+  - SessionStart probe wrapped in the typed `hooks: [{type: command, …}]`
+    structure with explicit `args` array.
+  - PostToolUse lint scoped via `if: "Edit(*.cpp)|Write(*.cpp)|…"` over
+    all C++ extensions (cpp, cc, cxx, c++, h, hpp, hxx, h++, ipp, tpp).
+    Each handler also runs in the new typed `hooks: [{type: command, …}]`
+    block.
+  - Added `statusMessage` on both — surfaces while the hook runs.
+
+No other changes — corpus, MCP server, skill, agent, slash command, and
+eval suite are byte-identical to v0.9.1.
+
 ## [0.9.1] — 2026-05-20
 
 Second corpus refresh + harness-bug fixes uncovered during the second
