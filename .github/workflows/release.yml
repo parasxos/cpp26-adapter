@@ -1,0 +1,34 @@
+name: release
+
+# Triggered on a v* tag push: opens an automated PR against
+# parasxos/claude-plugins bumping the cpp26-adapter pin to the new tag.
+#
+# Requires repo secret MARKETPLACE_PAT (fine-grained PAT with
+# contents:write + pull-requests:write on parasxos/claude-plugins).
+# See parasxos/.github README for setup.
+#
+# Also manually invokable via `gh workflow run release.yml -f tag=v0.9.3`
+# in case a tag was pushed before this workflow existed and the
+# marketplace needs to catch up.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to act on (e.g. v0.9.3). Defaults to github.ref_name on tag push.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  bump-marketplace:
+    uses: parasxos/.github/.github/workflows/bump-marketplace.yml@main
+    with:
+      plugin-name: cpp26-adapter
+      tag: ${{ inputs.tag || github.ref_name }}
+    secrets:
+      pat: ${{ secrets.MARKETPLACE_PAT }}
