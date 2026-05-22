@@ -1,0 +1,22 @@
+# Glama image only needs the MCP server + corpus. Everything else
+# is plugin scaffolding, eval rigging, or local artifacts.
+.git
+.github
+.pytest_cache
+.venv
+**/__pycache__
+**/*.pyc
+dist
+docs
+eval
+agents
+skills
+commands
+hooks
+tools
+corpus/raw
+corpus/scripts
+PLAN.md
+MAINTENANCE.md
+CONTRIBUTING.md
+CHANGELOG.md
