@@ -1,9 +1,8 @@
 # Contributing to cpp26-adapter
 
 Bug reports, eval-task suggestions, and install confirmations are all
-welcome. The repo carries the full build history (16 commits across
-the 9 binding-plan phases), so reading [`PLAN.md`](PLAN.md) and the
-commit log gives a clean picture of why every component exists.
+welcome. The commit log carries the full build history and gives a
+clean picture of why every component exists.
 
 ## Quick paths
 

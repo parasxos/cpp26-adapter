@@ -90,9 +90,8 @@ mcp-server/
   pyproject.toml            ← deps: mcp, pyyaml, pydantic, rapidfuzz
   tests/                    ← pytest; run via `pytest mcp-server/tests`
 
-PLAN.md               ← the binding plan (v1.1); reference, not edited per refresh
 README.md             ← user-facing layout overview
-MAINTENANCE.md        ← this file
+docs/MAINTENANCE.md   ← this file
 ```
 
 ## Plugin naming convention

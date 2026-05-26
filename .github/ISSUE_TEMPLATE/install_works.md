@@ -5,8 +5,7 @@ title: "Install works — [your-handle]"
 labels: ["installed", "external"]
 ---
 
-Quick install confirmation — closes part of the v1.0 gate
-(per [`PLAN.md`](../../PLAN.md) §8).
+Quick install confirmation.
 
 - [ ] I ran `/plugin marketplace add parasxos/claude-plugins`
 - [ ] I ran `/plugin install cpp26-adapter@parasxos/claude-plugins`
@@ -21,5 +20,4 @@ Quick install confirmation — closes part of the v1.0 gate
 
 **Anything that didn't work?** *(Optional — leave blank if everything was clean.)*
 
-<!-- Maintainer note: every confirming install is the social signal the
-     plugin needs to clear its Phase 8 acceptance criterion. Thanks. -->
+<!-- Maintainer note: every confirming install is a real social signal. Thanks. -->

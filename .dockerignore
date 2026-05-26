@@ -16,7 +16,6 @@ hooks
 tools
 corpus/raw
 corpus/scripts
-PLAN.md
 docs/MAINTENANCE.md
 CONTRIBUTING.md
 CHANGELOG.md

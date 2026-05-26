@@ -119,6 +119,4 @@ the cyan box of the diagram while the reviewer lives in the pink.
   scored by regex against fenced cpp blocks + LLM-judge for quality.
   v0.9.0 cleared 95% on first audited run.
 
-See [`PLAN.md`](../PLAN.md) for the full binding plan with phase-level
-acceptance criteria, and [`MAINTENANCE.md`](MAINTENANCE.md) for the
-quarterly refresh process.
+See [`MAINTENANCE.md`](MAINTENANCE.md) for the quarterly refresh process.

@@ -20,4 +20,4 @@ python3 -m venv .venv
 
 ## Wire-up
 
-The plugin's `.mcp.json` registers this server as `cpp26-ref` and launches it via stdio. See Phase 3 of `PLAN.md`.
+The plugin's `.mcp.json` registers this server as `cpp26-ref` and launches it via stdio.

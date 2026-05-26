@@ -9,7 +9,7 @@ The two gates standing between today and `v1.0.0`:
    triggers a `v1.0.0` bump.
 
 2. **≥1 external installer.** Per the binding plan's Phase 8 acceptance
-   ([`PLAN.md`](../../PLAN.md) §8). This is genuinely social — someone
+   (the binding plan §8). This is genuinely social — someone
    other than `parasxos@gmail.com` needs to install via the marketplace
    command and ideally provide a confirming signal (a star, an issue,
    a comment, a clone).
@@ -141,7 +141,7 @@ https://github.com/parasxos/cpp26-adapter
 
 A long-form post that walks through the architecture lives at
 [`docs/architecture.md`](../architecture.md) and the binding plan
-that drove the implementation lives at [`PLAN.md`](../../PLAN.md).
+that drove the implementation lives at the binding plan.
 For a blog, the natural structure is:
 
 1. The problem (LLMs default to pre-C++26 because of training data)
