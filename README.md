@@ -4,7 +4,7 @@
 A Claude Code plugin that biases generation toward ISO/IEC 14882:2026 final-form idioms — reflection, contracts, senders, `inplace_vector`, `#embed` — even when your local clang hasn't caught up.
 
 [![ci](https://github.com/parasxos/cpp26-adapter/actions/workflows/ci.yml/badge.svg)](https://github.com/parasxos/cpp26-adapter/actions/workflows/ci.yml)
-[![version](https://img.shields.io/badge/version-v0.9.1-blue)](https://github.com/parasxos/cpp26-adapter/releases/tag/v0.9.1)
+[![version](https://img.shields.io/badge/version-v1.0.0-blue)](https://github.com/parasxos/cpp26-adapter/releases/tag/v1.0.0)
 [![eval](https://img.shields.io/badge/eval-35%2F39%20(90%25)-brightgreen)](eval/results-v0.9.1.md)
 [![bar](https://img.shields.io/badge/bar-%E2%89%A585%25-success)](eval/results-v0.9.1.md)
 [![standard](https://img.shields.io/badge/ISO%2FIEC-14882%3A2026-orange)](https://www.iso.org/standard/83626.html)
@@ -243,7 +243,7 @@ No. The plugin only fires on new generation and on files you explicitly hand to 
 Out of scope. The plugin is purpose-built for C++26 final form (ISO/IEC 14882:2026). C++23 idioms are not corrected; C++29 is not addressed.
 
 **How is it kept current with paper revisions and compiler progress?**
-Quarterly refresh via `tools/refresh.sh` — re-pulls the paper index, scrapes compiler-status pages, re-runs the eval. Process documented in [`MAINTENANCE.md`](MAINTENANCE.md). The v1.0 trigger is two successive eval-passing refreshes.
+Quarterly refresh via `tools/refresh.sh` — re-pulls the paper index, scrapes compiler-status pages, re-runs the eval. Process documented in [`MAINTENANCE.md`](MAINTENANCE.md). v1.0 was cut once the second eval-passing refresh held the bar; subsequent quarterly refreshes are tagged as patch or minor bumps under the v1.x line.
 
 **How is the corpus sourced?**
 `corpus/scripts/fetch_index.py` queries `cplusplus/papers` via the GitHub API and unions two filters to catch plenary-adopted-but-unlabelled papers. The 16 deep references are hand-authored against the canonical paper text; shallow and stub tiers are template-generated from the index. Everything in `corpus/` is CC-BY-SA-4.0 and derives from public WG21 material — see [`LICENSE-CORPUS`](LICENSE-CORPUS) for attribution.
@@ -262,9 +262,9 @@ Quarterly refresh via `tools/refresh.sh` — re-pulls the paper index, scrapes c
 
 ## Status
 
-**v0.9.0 — feature-complete, eval gate cleared, pre-1.0.**
+**v1.0.0 — eval gate held across two successive refreshes, contract-binding release.**
 
-The implementation works end-to-end and clears the eval bar (95% vs ≥85% required). `v1.0` is gated on two successive quarterly refreshes that hold the bar, per [`MAINTENANCE.md`](MAINTENANCE.md). The MCP tool signatures and the subagent's output schema are considered stable for the `0.9.x` series.
+The implementation works end-to-end and clears the eval bar (95% vs ≥85% required at v0.9.0, sustained at 90% at v0.9.1). The MCP tool signatures, the subagent's output schema, and the skill's standard-first invariant are now contract-binding for the `1.x` line. Subsequent quarterly refreshes ship as patch or minor bumps per [`MAINTENANCE.md`](MAINTENANCE.md).
 
 ---
 
@@ -281,7 +281,7 @@ Dual-licensed by directory:
 
 - [`docs/architecture.md`](docs/architecture.md) — the standard-first invariant in long form.
 - [`PLAN.md`](PLAN.md) — the binding implementation plan with phase-level acceptance criteria.
-- [`MAINTENANCE.md`](MAINTENANCE.md) — quarterly refresh process and the v1.0 trigger.
+- [`MAINTENANCE.md`](MAINTENANCE.md) — quarterly refresh process and version-bump policy.
 - [`eval/results-v0.9.0.md`](eval/results-v0.9.0.md) — per-task scoring from the gate run.
 - Plugin repo: [github.com/parasxos/cpp26-adapter](https://github.com/parasxos/cpp26-adapter)
 - Marketplace: [github.com/parasxos/claude-plugins](https://github.com/parasxos/claude-plugins)

@@ -110,8 +110,10 @@ SemVer 2.0:
   reference edits, eval task swaps.
 - **Minor (0.9.x → 0.10.0)**: new feature in the plugin's own surface
   (skill restructuring, new MCP tool, new subagent).
-- **Major (0.x → 1.0)**: eval gate (≥85% axis-1) consistently met across
-  two successive refreshes.
+- **Major (1.x → 2.0)**: breaking change to the MCP tool signatures, the
+  subagent's output schema, or the standard-first invariant. v1.0 was cut
+  on 2026-05-26 once the eval gate held across two successive refreshes
+  (v0.9.0 95%, v0.9.1 90%).
 
 After each refresh, bump the version in `.claude-plugin/plugin.json`
 and tag locally; push the tag at the next distribution event.
