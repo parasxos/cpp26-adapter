@@ -55,7 +55,7 @@ env so `claude -p` uses your Claude subscription quota. Set
 `CPP26_EVAL_USE_API=1` to opt back into per-token API billing.
 
 The bar is **≥85% standard-compliance** (axis-1). v1.0 is gated on
-two successive eval-passing refreshes per [`MAINTENANCE.md`](MAINTENANCE.md).
+two successive eval-passing refreshes per [`docs/MAINTENANCE.md`](docs/MAINTENANCE.md).
 
 ## Adding a new deep-tier reference
 
@@ -73,7 +73,7 @@ late-DR feature that landed in the IS):
 6. Add 1+ task to `eval/tasks.yaml` exercising the canonical idiom.
 7. Re-run validator + eval; commit.
 
-The bookkeeping is captured in [`MAINTENANCE.md`](MAINTENANCE.md).
+The bookkeeping is captured in [`docs/MAINTENANCE.md`](docs/MAINTENANCE.md).
 
 ## Adding a new anti-pattern regex
 

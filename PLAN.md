@@ -426,11 +426,11 @@ This is the gate. **DoD bar: 85% standard-compliance on the held suite.**
 
 ### Phase 9 — Maintenance scaffolding (½ day at v1.0, ~1 day/quarter ongoing)
 
-- `tools/refresh.sh`: runs `fetch_index.py` (diff against `index.yaml`, emit new-paper rows), `refresh_status.py` (diff compiler-status pages), `eval/run.py`. Output: a `MAINTENANCE.md` checklist with hand-actionable items.
+- `tools/refresh.sh`: runs `fetch_index.py` (diff against `index.yaml`, emit new-paper rows), `refresh_status.py` (diff compiler-status pages), `eval/run.py`. Output: a `docs/MAINTENANCE.md` checklist with hand-actionable items.
 - GitHub Action (or local cron): monthly run of `tools/refresh.sh`, opens an issue if diffs are non-empty.
-- Document quarterly process in `MAINTENANCE.md`: (1) merge new C++26 defect-report papers, (2) refresh compiler status, (3) re-run eval, (4) bump corpus version in `index.yaml` header.
+- Document quarterly process in `docs/MAINTENANCE.md`: (1) merge new C++26 defect-report papers, (2) refresh compiler status, (3) re-run eval, (4) bump corpus version in `index.yaml` header.
 
-**Acceptance:** `MAINTENANCE.md` exists; running `tools/refresh.sh` on day 0 produces an empty checklist (clean baseline).
+**Acceptance:** `docs/MAINTENANCE.md` exists; running `tools/refresh.sh` on day 0 produces an empty checklist (clean baseline).
 
 ---
 
@@ -484,7 +484,7 @@ Buffer (3–7 days) absorbs the corpus slog overrunning and the eval-iteration l
 | `eval/run.py` | 7b | Harness, 3-axis scoring |
 | `eval/results-v1.0.md` | 7c | Eval gate evidence |
 | `tools/refresh.sh` | 9 | Quarterly maintenance entry point |
-| `MAINTENANCE.md` | 9 | Operator checklist |
+| `docs/MAINTENANCE.md` | 9 | Operator checklist |
 
 ---
 

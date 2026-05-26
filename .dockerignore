@@ -17,6 +17,6 @@ tools
 corpus/raw
 corpus/scripts
 PLAN.md
-MAINTENANCE.md
+docs/MAINTENANCE.md
 CONTRIBUTING.md
 CHANGELOG.md

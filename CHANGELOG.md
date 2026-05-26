@@ -3,7 +3,7 @@
 All notable changes to `cpp26-adapter` are documented here.
 
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-SemVer follows the policy in [`MAINTENANCE.md`](MAINTENANCE.md): patch
+SemVer follows the policy in [`docs/MAINTENANCE.md`](docs/MAINTENANCE.md): patch
 for corpus/status refreshes, minor for plugin-surface changes, major
 on two successive eval-passing refreshes.
 
@@ -169,7 +169,7 @@ per `PLAN.md` §8 acceptance.
 - **Documentation** — README (marketing-grade synthesis of three
   parallel drafts), `docs/architecture.md` (standard-first invariant
   long-form), `PLAN.md` (binding implementation plan with phase-level
-  acceptance criteria), `MAINTENANCE.md` (quarterly refresh process
+  acceptance criteria), `docs/MAINTENANCE.md` (quarterly refresh process
   and SemVer policy).
 
 ### Eval

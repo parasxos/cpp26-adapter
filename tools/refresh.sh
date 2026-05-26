@@ -15,7 +15,7 @@
 #                                          Expensive; only run when API
 #                                          credits are available.
 #
-# Output: a MAINTENANCE.md checklist describing the changes to merge.
+# Output: a docs/MAINTENANCE.md checklist describing the changes to merge.
 # This script does NOT write to corpus/ — the operator commits manually
 # after reviewing the diff.
 

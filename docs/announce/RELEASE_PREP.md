@@ -5,7 +5,7 @@ The two gates standing between today and `v1.0.0`:
 1. **Second successive eval refresh ≥85%.** First was 37/39 (95%) on
    2026-05-20. This is satisfied automatically by the quarterly
    `tools/refresh.sh --with-eval` cycle. If the second refresh holds
-   the bar, the SemVer rule in [`MAINTENANCE.md`](../../MAINTENANCE.md)
+   the bar, the SemVer rule in [`docs/MAINTENANCE.md`](../MAINTENANCE.md)
    triggers a `v1.0.0` bump.
 
 2. **≥1 external installer.** Per the binding plan's Phase 8 acceptance
@@ -187,7 +187,7 @@ cleared.
    v0.9.0 (or carries only the corpus refresh diff).
 2. Bump `.claude-plugin/plugin.json` to `1.0.0`.
 3. Bump the marketplace entry's `ref` to `v1.0.0`.
-4. Update `MAINTENANCE.md` to record the date of the v1.0 trigger.
+4. Update `docs/MAINTENANCE.md` to record the date of the v1.0 trigger.
 5. Tag `git tag -a v1.0.0 -m "v1.0.0 — eval gate held across two refreshes; external installer confirmed"`.
 6. Push tag, push marketplace update.
 7. Announce the v1.0 cut (LinkedIn / X / dev.to long-form).

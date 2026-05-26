@@ -18,7 +18,7 @@
 #       prose; the script appends the skeleton)
 #     - commit, tag v1.0.0, push tag + main
 #     - publish GitHub Release v1.0.0 (NOT prerelease)
-#     - update MAINTENANCE.md last-refreshed dates if you choose to
+#     - update docs/MAINTENANCE.md last-refreshed dates if you choose to
 #
 #   marketplace repo (parasxos/claude-plugins):
 #     - bump the cpp26-adapter ref to v1.0.0
@@ -137,7 +137,7 @@ The first stable release. Both v1.0 gates from PLAN.md §8 closed:
 - README badges + GitHub Release transitioned from prerelease to stable.
 - Eval bar policy carried forward unchanged: any v1.x.y release must
   hold ≥85% on the held suite; refresh cadence stays quarterly per
-  MAINTENANCE.md.
+  docs/MAINTENANCE.md.
 '''
 p.write_text(text.replace(needle, new_section, 1))
 print('  CHANGELOG.md updated')
