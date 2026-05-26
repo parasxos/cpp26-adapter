@@ -243,7 +243,7 @@ No. The plugin only fires on new generation and on files you explicitly hand to 
 Out of scope. The plugin is purpose-built for C++26 final form (ISO/IEC 14882:2026). C++23 idioms are not corrected; C++29 is not addressed.
 
 **How is it kept current with paper revisions and compiler progress?**
-Quarterly refresh via `tools/refresh.sh` — re-pulls the paper index, scrapes compiler-status pages, re-runs the eval. Process documented in [`MAINTENANCE.md`](MAINTENANCE.md). v1.0 was cut once the second eval-passing refresh held the bar; subsequent quarterly refreshes are tagged as patch or minor bumps under the v1.x line.
+Quarterly refresh — the paper index, the compiler-status table, and the eval suite are all re-run on a quarterly cadence so the corpus tracks WG21 meetings and compiler progress. Subsequent quarterly refreshes are tagged as patch or minor bumps under the v1.x line.
 
 **How is the corpus sourced?**
 `corpus/scripts/fetch_index.py` queries `cplusplus/papers` via the GitHub API and unions two filters to catch plenary-adopted-but-unlabelled papers. The 16 deep references are hand-authored against the canonical paper text; shallow and stub tiers are template-generated from the index. Everything in `corpus/` is CC-BY-SA-4.0 and derives from public WG21 material — see [`LICENSE-CORPUS`](LICENSE-CORPUS) for attribution.
@@ -264,7 +264,7 @@ Quarterly refresh via `tools/refresh.sh` — re-pulls the paper index, scrapes c
 
 **v1.0.0 — eval gate held across two successive refreshes, contract-binding release.**
 
-The implementation works end-to-end and clears the eval bar (95% vs ≥85% required at v0.9.0, sustained at 90% at v0.9.1). The MCP tool signatures, the subagent's output schema, and the skill's standard-first invariant are now contract-binding for the `1.x` line. Subsequent quarterly refreshes ship as patch or minor bumps per [`MAINTENANCE.md`](MAINTENANCE.md).
+The implementation works end-to-end and clears the eval bar (95% vs ≥85% required at v0.9.0, sustained at 90% at v0.9.1). The MCP tool signatures, the subagent's output schema, and the skill's standard-first invariant are now contract-binding for the `1.x` line.
 
 ---
 
@@ -280,8 +280,6 @@ Dual-licensed by directory:
 ## See also
 
 - [`docs/architecture.md`](docs/architecture.md) — the standard-first invariant in long form.
-- [`PLAN.md`](PLAN.md) — the binding implementation plan with phase-level acceptance criteria.
-- [`MAINTENANCE.md`](MAINTENANCE.md) — quarterly refresh process and version-bump policy.
 - [`eval/results-v0.9.0.md`](eval/results-v0.9.0.md) — per-task scoring from the gate run.
 - Plugin repo: [github.com/parasxos/cpp26-adapter](https://github.com/parasxos/cpp26-adapter)
 - Marketplace: [github.com/parasxos/claude-plugins](https://github.com/parasxos/claude-plugins)
